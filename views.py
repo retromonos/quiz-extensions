@@ -148,6 +148,7 @@ def status():  # pragma: no cover
 
     # Check index
     try:
+        logger.debug(url_for("index", _external=True))
         response = requests.get(url_for("index", _external=True), verify=False)
         status["checks"]["index"] = (
             response.text == "Please contact your System Administrator."
@@ -183,7 +184,7 @@ def status():  # pragma: no cover
 
     # Check DB connection
     try:
-        db.session.query(text("1")).all()
+        db.session.execute(text("SELECT 1"))
         status["checks"]["db"] = True
     except Exception:
         logger.exception("DB connection failed.")

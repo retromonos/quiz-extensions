@@ -1,0 +1,10 @@
+canvasapi==3.3.0
+Flask==3.1.2
+Flask-Migrate==4.1.0
+Flask-SQLAlchemy==3.1.1
+lxml==6.0.2
+#mysqlclient==2.0.3 seems to be a dead dependency
+git+https://github.com/ucfcdl/pylti.git@roles#egg=PyLTI
+redis==7.0.1
+requests==2.32.5
+rq==2.6.0

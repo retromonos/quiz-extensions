@@ -1,0 +1,53 @@
+version: '6.0.0'
+
+volumes:
+  local_mysql_data: {}
+
+services:
+  quiz_db:
+    image: mysql:8.2.0
+    platform: linux/amd64
+    volumes:
+      - local_mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: docker
+      MYSQL_DATABASE: quiz_extensions
+      MYSQL_USER: quiz_extensions
+      MYSQL_PASSWORD: password
+    ports:
+      - 3306:3306
+  quiz_redis:
+    image: redis
+    ports:
+      - 6379:6379
+  quiz_extensions:
+    build:
+      context: .
+      args:
+        - "REQUIREMENTS=${REQUIREMENTS}"
+    volumes:
+      - ./:/app
+      - type: bind
+        source: ./setup.cfg
+        target: /app/setup.cfg
+      - type: bind
+        source: ./pyproject.toml
+        target: /app/pyproject.toml
+      - type: bind
+        source: ./devops/uwsgi.ini
+        target: /app/uwsgi.ini
+      - type: bind
+        source: ./devops/prestart.sh
+        target: /app/prestart.sh
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=views.py
+    ports:
+      - "80:80"
+    depends_on:
+      quiz_db:
+        condition: service_started
+        restart: true
+      quiz_redis:
+        condition: service_started

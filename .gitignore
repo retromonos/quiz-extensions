@@ -9,3 +9,4 @@ config.py
 /htmlcov
 /logs
 dump.rdb
+*.venv

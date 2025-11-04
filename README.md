@@ -62,6 +62,30 @@ Create a virtual environment
 virtualenv env
 ```
 
+### Run with Docker
+
+Build the images (Flask, DB, Redis)
+
+```sh
+make build
+```
+
+Start containers
+
+```sh
+make start
+```
+
+If you want to see active logs, run as attached
+
+```sh
+make start-attached
+```
+
+Currently, when using Docker the page runs on port 80.
+
+### Run Independently
+
 Source the environment
 
 ```sh
