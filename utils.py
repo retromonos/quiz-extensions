@@ -57,7 +57,7 @@ def extend_quiz(course_id, quiz, percent, user_id_list):
         user_extension = {"user_id": user_id, "extra_time": added_time}
         quiz_extensions["quiz_extensions"].append(user_extension)
 
-    url_str = "{}courses/{}/quizzes/{}/extensions"
+    url_str = "{}/api/v1/courses/{}/quizzes/{}/extensions"
     extensions_response = requests.post(
         url_str.format(config.API_URL, course_id, quiz_id),
         data=json.dumps(quiz_extensions),
@@ -92,7 +92,7 @@ def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
     :returns: A list of dictionaries representing Canvas Quiz objects.
     """
     quizzes = []
-    quizzes_url = "{}courses/{}/quizzes?per_page={}".format(
+    quizzes_url = "{}/api/v1/courses/{}/quizzes?per_page={}".format(
         config.API_URL, course_id, per_page
     )
 
@@ -126,7 +126,7 @@ def get_user(course_id, user_id):
     :returns: A dictionary representation of a User in Canvas.
     """
     response = requests.get(
-        "{}courses/{}/users/{}".format(config.API_URL, course_id, user_id),
+        "{}/api/v1/courses/{}/users/{}".format(config.API_URL, course_id, user_id),
         params={"include[]": "enrollments"},
         headers=headers,
     )
@@ -144,7 +144,7 @@ def get_course(course_id):
     :rtype: dict
     :returns: A dictionary representation of a Course in Canvas.
     """
-    course_url = "{}courses/{}".format(config.API_URL, course_id)
+    course_url = "{}/api/v1/courses/{}".format(config.API_URL, course_id)
     response = requests.get(course_url, headers=headers)
     response.raise_for_status()
 

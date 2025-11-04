@@ -44,7 +44,7 @@ db.init_app(app)
 migrate = Migrate(app, db)
 
 # CanvasAPI requires /api/v1/ to be removed
-canvas = Canvas(config.API_URL[:-8], config.API_KEY)
+canvas = Canvas(config.API_URL, config.API_KEY)
 
 json_headers = {
     "Authorization": "Bearer " + config.API_KEY,
@@ -55,6 +55,8 @@ json_headers = {
 def check_valid_user(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        #Until we figure out LTI 1.3:
+        return f(*args, **kwargs)
         """
         Decorator to check if the user is allowed access to the app.
         If user is allowed, return the decorated function.
@@ -218,7 +220,7 @@ def xml():
 
 @app.route("/quiz/<course_id>/", methods=["GET"])
 @check_valid_user
-@lti(error=error, request="session", role="staff", app=app)
+#@lti(error=error, request="session", role="staff", app=app)
 def quiz(lti=lti, course_id=None):
     """
     Main landing page for the app.
@@ -249,7 +251,7 @@ def refresh(course_id=None):
 
 @app.route("/update/<course_id>/", methods=["POST"])
 @check_valid_user
-@lti(error=error, request="session", role="staff", app=app)
+#@lti(error=error, request="session", role="staff", app=app)
 def update(lti=lti, course_id=None):
     """
     Creates a new `update_background` job.
@@ -652,7 +654,7 @@ def missing_and_stale_quizzes_check(course_id):
 
 @app.route("/filter/<course_id>/", methods=["GET"])
 @check_valid_user
-@lti(error=error, request="session", role="staff", app=app)
+#@lti(error=error, request="session", role="staff", app=app)
 def filter(lti=lti, course_id=None):
     """
     Display a filtered and paginated list of students in the course.
@@ -676,7 +678,7 @@ def filter(lti=lti, course_id=None):
 
 
 @app.route("/launch", methods=["POST"])
-@lti(error=error, request="initial", role="staff", app=app)
+#@lti(error=error, request="initial", role="staff", app=app)
 def lti_tool(lti=lti):
     """
     Bootstrapper for lti.
