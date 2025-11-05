@@ -22,10 +22,7 @@ import config
 from models import Course, Extension, Quiz, User, db
 from utils import (
     extend_quiz,
-    get_course,
     get_or_create,
-    get_quizzes,
-    get_user,
     missing_and_stale_quizzes,
     update_job,
 )
@@ -345,13 +342,13 @@ def update_background(course_id, extension_dict):
             return job.meta
 
         try:
-            course_json = get_course(course_id)
+            course_obj = canvas.get_course(course_id)
         except requests.exceptions.HTTPError:
             update_job(job, 0, "Course not found.", "failed", error=True)
             logger.exception("Unable to find course #{}".format(course_id))
             return job.meta
 
-        course_name = course_json.get("name", "<UNNAMED COURSE>")
+        course_name = course_obj.name
 
         user_ids = extension_dict.get("user_ids", [])
         percent = extension_dict.get("percent", None)
@@ -369,10 +366,10 @@ def update_background(course_id, extension_dict):
 
         for user_id in user_ids:
             try:
-                canvas_user = get_user(course_id, user_id)
+                canvas_user = course_obj.get_user(user_id)
+                sortable_name = canvas_user.name
 
-                sortable_name = canvas_user.get("sortable_name", "<MISSING NAME>")
-                sis_id = canvas_user.get("sis_user_id")
+                sis_id = canvas_user.__getattribute__("sis_user_id")
 
             except requests.exceptions.HTTPError:
                 # Unable to find user. Log and skip them.
@@ -396,7 +393,7 @@ def update_background(course_id, extension_dict):
 
             db.session.commit()
 
-        quizzes = get_quizzes(course_id)
+        quizzes = list(course_obj.get_quizzes())
         num_quizzes = len(quizzes)
         quiz_time_list = []
         unchanged_quiz_time_list = []
@@ -415,8 +412,8 @@ def update_background(course_id, extension_dict):
             return job.meta
 
         for index, quiz in enumerate(quizzes):
-            quiz_id = quiz.get("id", None)
-            quiz_title = quiz.get("title", "[UNTITLED QUIZ]")
+            quiz_id = quiz.id
+            quiz_title = quiz.title
 
             comp_perc = int(((float(index)) / float(num_quizzes)) * 100)
             updating_str = "Updating quiz #{} - {} [{} of {}]"
@@ -428,7 +425,7 @@ def update_background(course_id, extension_dict):
                 error=False,
             )
 
-            extension_response = extend_quiz(course_id, quiz, percent, user_ids)
+            extension_response = extend_quiz(quiz, percent, user_ids)
 
             if extension_response.get("success", False) is True:
                 # add/update quiz
@@ -436,7 +433,7 @@ def update_background(course_id, extension_dict):
                     db.session, Quiz, canvas_id=quiz_id, course_id=course.id
                 )
                 quiz_obj.title = quiz_title
-                quiz_obj.time_limit = quiz.get("time_limit")
+                quiz_obj.time_limit = quiz.__getattribute__("time_limit")
 
                 db.session.commit()
 
@@ -498,9 +495,9 @@ def refresh_background(course_id):
 
     with app.app_context():
         course, created = get_or_create(db.session, Course, canvas_id=course_id)
-
         try:
-            course_name = get_course(course_id).get("name", "<UNNAMED COURSE>")
+            course_obj = canvas.get_course(course_id)
+            course_name = course_obj.name
             course.course_name = course_name
             db.session.commit()
         except requests.exceptions.HTTPError:
@@ -509,7 +506,7 @@ def refresh_background(course_id):
 
             return job.meta
 
-        quizzes = missing_and_stale_quizzes(course_id)
+        quizzes = missing_and_stale_quizzes(canvas, course_id)
 
         num_quizzes = len(quizzes)
 
@@ -542,11 +539,11 @@ def refresh_background(course_id):
 
             # Check if user is in course. If not, deactivate extension.
             try:
-                canvas_user = get_user(course_id, user_canvas_id)
+                canvas_user = course_obj.get_user(user_canvas_id)
 
                 # Skip user if not a student. Fixes an edge case where a
                 # student that previously recieved an extension changes roles.
-                enrolls = canvas_user.get("enrollments", [])
+                enrolls = list(canvas_user.get_enrollments())
                 type_list = [
                     e["type"]
                     for e in enrolls
@@ -591,8 +588,8 @@ def refresh_background(course_id):
             return job.meta
 
         for index, quiz in enumerate(quizzes):
-            quiz_id = quiz.get("id", None)
-            quiz_title = quiz.get("title", "[UNTITLED QUIZ]")
+            quiz_id = quiz.id
+            quiz_title = quiz.title
 
             comp_perc = int(((float(index)) / float(num_quizzes)) * 100)
             refreshing_str = "Refreshing quiz #{} - {} [{} of {}]"
@@ -605,7 +602,7 @@ def refresh_background(course_id):
             )
 
             for percent, user_list in percent_user_map.items():
-                extension_response = extend_quiz(course_id, quiz, percent, user_list)
+                extension_response = extend_quiz(quiz, percent, user_list)
 
                 if extension_response.get("success", False) is True:
                     # add/update quiz
@@ -613,7 +610,7 @@ def refresh_background(course_id):
                         db.session, Quiz, canvas_id=quiz_id, course_id=course.id
                     )
                     quiz_obj.title = quiz_title
-                    quiz_obj.time_limit = quiz.get("time_limit")
+                    quiz_obj.time_limit = quiz.__getattribute__("time_limit")
 
                     db.session.commit()
                 else:
@@ -648,7 +645,7 @@ def missing_and_stale_quizzes_check(course_id):
         # There are no extensions for this course yet. No need to update.
         return "false"
 
-    missing = len(missing_and_stale_quizzes(course_id, True)) > 0
+    missing = len(missing_and_stale_quizzes(canvas, course_id, True)) > 0
     return json.dumps(missing)
 
 

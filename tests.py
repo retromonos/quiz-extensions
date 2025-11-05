@@ -11,6 +11,7 @@ import requests_mock
 from flask import session, url_for
 from pylti.common import LTI_SESSION_KEY
 from rq import Queue, SimpleWorker
+from canvasapi import Canvas
 
 import config
 import views

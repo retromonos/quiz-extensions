@@ -5,6 +5,9 @@ import logging
 import math
 from collections import defaultdict
 from logging.config import dictConfig
+from canvasapi import Canvas
+from canvasapi.quiz import Quiz as CQuiz
+from canvasapi.quiz import QuizExtension
 
 import requests
 
@@ -21,7 +24,7 @@ json_headers = {
 }
 
 
-def extend_quiz(course_id, quiz, percent, user_id_list):
+def extend_quiz(quiz:CQuiz, percent, user_id_list):
     """
     Extends a quiz time by a percentage for a list of users.
 
@@ -40,8 +43,8 @@ def extend_quiz(course_id, quiz, percent, user_id_list):
         - added_time `int` The amount of time added in minutes. Returns
         `None` if there was no time added.
     """
-    quiz_id = quiz.get("id")
-    time_limit = quiz.get("time_limit")
+    quiz_id = quiz.id
+    time_limit = quiz.__getattribute__("time_limit")
 
     if time_limit is None or time_limit < 1:
         msg = "Quiz #{} has no time limit, so there is no time to add."
@@ -51,12 +54,30 @@ def extend_quiz(course_id, quiz, percent, user_id_list):
         math.ceil(time_limit * ((float(percent) - 100) / 100) if percent else 0)
     )
 
-    quiz_extensions = defaultdict(list)
+    quiz_extensions = []
 
     for user_id in user_id_list:
         user_extension = {"user_id": user_id, "extra_time": added_time}
-        quiz_extensions["quiz_extensions"].append(user_extension)
+        quiz_extensions.append(user_extension)
 
+    try:
+        extensions_res:list[QuizExtension] = quiz.set_extensions(quiz_extensions)
+    except Exception as err:
+        msg = "Error creating extension for quiz #{}. Canvas status code: {}"
+        return {
+            "success": False,
+            "message": msg.format(quiz_id, err),
+            "added_time": None,
+        }
+
+    msg = "Successfully added {} minutes to quiz #{}"
+    return {
+        "success": True,
+        "message": msg.format(added_time, quiz_id),
+        "added_time": added_time,
+    }
+
+    """
     url_str = "{}/api/v1/courses/{}/quizzes/{}/extensions"
     extensions_response = requests.post(
         url_str.format(config.API_URL, course_id, quiz_id),
@@ -78,8 +99,9 @@ def extend_quiz(course_id, quiz, percent, user_id_list):
             "message": msg.format(quiz_id, extensions_response.status_code),
             "added_time": None,
         }
+    """
 
-
+#all occurances migrated except tests
 def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
     """
     Get all quizzes in a Canvas course.
@@ -113,7 +135,7 @@ def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
 
     return quizzes
 
-
+#all occurances migrated except tests
 def get_user(course_id, user_id):
     """
     Get a user from canvas by id, with respect to a course.
@@ -134,7 +156,7 @@ def get_user(course_id, user_id):
 
     return response.json()
 
-
+#all occurances migrated except tests
 def get_course(course_id):
     """
     Get a course from canvas by id.
@@ -170,11 +192,13 @@ def get_or_create(session, model, **kwargs):
         return instance, True
 
 
-def missing_and_stale_quizzes(course_id, quickcheck=False):
+def missing_and_stale_quizzes(canvas:Canvas, course_id, quickcheck=False):
     """
     Find all quizzes that are in Canvas but not in the database (missing),
     or have an old time limit (stale)
 
+    :param canvas: The Canvas API object.
+    :type canvas: Canvas
     :param course_id: The Canvas ID of the Course.
     :type course_id: int
     :param quickcheck: Setting this to `True` will return when the
@@ -184,15 +208,16 @@ def missing_and_stale_quizzes(course_id, quickcheck=False):
     :returns: A list of dictionaries representing missing quizzes. If
         quickcheck is true, only the first missing/stale result is returned.
     """
-    quizzes = get_quizzes(course_id)
+    course_obj = canvas.get_course(course_id)
+    quizzes = list(course_obj.get_quizzes())
 
     missing_list = []
 
     for canvas_quiz in quizzes:
-        quiz = Quiz.query.filter_by(canvas_id=canvas_quiz.get("id")).first()
+        quiz = Quiz.query.filter_by(canvas_id=canvas_quiz.id).first()
 
         # quiz is missing or time limit has changed
-        if not quiz or quiz.time_limit != canvas_quiz.get("time_limit"):
+        if not quiz or quiz.time_limit != canvas_quiz.__getattribute__("time_limit"):
             missing_list.append(canvas_quiz)
 
             if quickcheck:

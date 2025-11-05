@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [6.0.0] - Und.
+
+### General
+
+- Updated all dependencies to their latest versions.
+- Replaced our Canvas API utility functions with the proper PyPi *Canvas API* package.
+
+### Backstage
+
+- The project has been properly Dockerized now.
+  - Flask image based off of *tiangolo/uwsgi-nginx-flask:python3.9*, RQ worker is run in the same container on startup.
+  - Redis image running latest.
+  - MySQL image running 8.2.0.
+- Added a Makefile with commands for various build/deploy/test functions, based off of Ableplayer implementation.
+- config.py has been updated to use a .env file, please see *.env.template*.
+- README.md has been updated with instructions for setting up the new deployment method.
+
 ## [5.0.0] - 2021-10-31
 
 ### General
