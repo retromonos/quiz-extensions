@@ -1,31 +1,32 @@
 import os
 
 # Canvas API URL (e.g. 'http://example.com/api/v1/')
-API_URL = "http://example.com/api/v1/"
-# Canvas API Key
-API_KEY = "CHANGEME"
+API_URL = os.environ.get("API_URL")
+
+API_KEY = os.environ.get("API_KEY")
 
 # A list of domains that are allowed to use the tool.
 # (e.g. ['example.com', 'example.edu'])
-ALLOWED_CANVAS_DOMAINS = ["example.edu"]
+ALLOWED_CANVAS_DOMAINS = os.environ.get("ALLOWED_CANVAS_DOMAINS").replace(" ", "").split(",")
 
 # The maximum amount of objects the Canvas API will return per page (usually 100)
-MAX_PER_PAGE = 100
+MAX_PER_PAGE = int(os.environ.get("MAX_PER_PAGE"))
 
 # A secret key used by Flask for signing. KEEP THIS SECRET!
 # (e.g. 'Ro0ibrkb4Z4bZmz1f5g1+/16K19GH/pa')
-SECRET_KEY = "CHANGEME"
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
-LTI_TOOL_ID = "CHANGEME"  # A unique ID for the tool
+LTI_TOOL_ID = os.environ.get("LTI_TOOL_ID") # A unique ID for the tool
 
 # URI for database. (e.g. 'mysql://root:root@localhost/quiz_extensions')
-SQLALCHEMY_DATABASE_URI = ""
-SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
+SQLALCHEMY_TRACK_MODIFICATIONS = int(os.environ.get("SQLALCHEMY_TRACK_MODIFICATIONS")) == 1
 
-GOOGLE_ANALYTICS = ""  # The Google Analytics ID to use.
+GOOGLE_ANALYTICS = os.environ.get("GOOGLE_ANALYTICS")  # The Google Analytics ID to use.
 
 # URL for the redis server (e.g. 'redis://localhost:6379')
-REDIS_URL = "redis://localhost:6379"
+#REDIS_URL = "redis://quiz_redis:6379"
+REDIS_URL = os.environ.get("REDIS_URL")
 
 LOGGING_CONFIG = {
     "version": 1,
@@ -56,7 +57,7 @@ LOGGING_CONFIG = {
     },
 }
 
-TESTING_API_URL = "example.edu"  # Used only to run tests
+TESTING_API_URL = os.environ.get("TESTING_API_URL")  # Used only to run tests
 
 
 CONSUMER_KEY = os.environ.get("CONSUMER_KEY", "key")
@@ -81,5 +82,5 @@ PYLTI_CONFIG = {
 }
 
 # Chrome 80 SameSite=None; Secure fix
-SESSION_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = int(os.environ.get("SESSION_COOKIE_SECURE")) == 1
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE")

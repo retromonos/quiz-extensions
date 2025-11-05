@@ -26,40 +26,40 @@ Switch into the new directory
 cd quiz-extensions
 ```
 
-Create the config file from the template
+Create the .env file from the template
 
 ```sh
-cp config.py.template config.py
+cp .env.template .env
 ```
 
-Fill in the config file
+Fill in the .env file
 
 ```python
-API_URL = ''  # Canvas API URL (e.g. 'http://example.com/api/v1/')
-API_KEY = ''  # Canvas API Key
+API_URL=''  # Canvas API URL (e.g. 'http://example.com/api/v1/')
+API_KEY=''  # Canvas API Key
 
 # The maximum amount of objects the Canvas API will return per page (usually 100)
-MAX_PER_PAGE = 100
+MAX_PER_PAGE=100
 
 # A secret key used by Flask for signing. KEEP THIS SECRET! (e.g. 'Ro0ibrkb4Z4bZmz1f5g1+/16K19GH/pa')
-SECRET_KEY = ''
+SECRET_KEY=''
 
-LTI_KEY = ''  # Consumer Key
-LTI_SECRET = ''  # Shared Secret
+LTI_KEY=''  # Consumer Key
+LTI_SECRET=''  # Shared Secret
 
-LTI_TOOL_ID = ''  # A unique ID for the tool
+LTI_TOOL_ID=''  # A unique ID for the tool
 
-SQLALCHEMY_DATABASE_URI = ''  # URI for database. (e.g. 'mysql://root:root@localhost/quiz_extensions')
+SQLALCHEMY_DATABASE_URI=''  # URI for database. (e.g. 'mysql://root:root@localhost/quiz_extensions')
 
-GOOGLE_ANALYTICS = ''  # The Google Analytics ID to use.
+GOOGLE_ANALYTICS=''  # The Google Analytics ID to use.
 
-REDIS_URL = ''  # URL for the redis server (e.g. 'redis://localhost:6379')
+REDIS_URL=''  # URL for the redis server (e.g. 'redis://localhost:6379')
 ```
 
 Create a virtual environment
 
 ```sh
-virtualenv env
+python3 -m venv .venv
 ```
 
 ### Run with Docker
@@ -89,7 +89,7 @@ Currently, when using Docker the page runs on port 80.
 Source the environment
 
 ```sh
-source env/bin/activate
+. .venv/bin/activate
 ```
 
 Install required packages
