@@ -26,7 +26,7 @@ services:
       args:
         - "REQUIREMENTS=${REQUIREMENTS}"
     volumes:
-      - ./:/app
+      - ./lti:/app
       - type: bind
         source: ./setup.cfg
         target: /app/setup.cfg
@@ -42,9 +42,10 @@ services:
     env_file:
       - .env
     environment:
+      - MODULE_NAME=app
       - FLASK_APP=views.py
     ports:
-      - "80:80"
+      - "8000:80"
     depends_on:
       quiz_db:
         condition: service_started

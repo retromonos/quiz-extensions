@@ -5,12 +5,15 @@ API_URL = os.environ.get("API_URL")
 
 API_KEY = os.environ.get("API_KEY")
 
+DEBUG = int(os.environ.get("DEBUG", 0)) == 1
+TESTING = int(os.environ.get("TESTING", 0)) == 1
+
 # A list of domains that are allowed to use the tool.
 # (e.g. ['example.com', 'example.edu'])
-ALLOWED_CANVAS_DOMAINS = os.environ.get("ALLOWED_CANVAS_DOMAINS").replace(" ", "").split(",")
+ALLOWED_CANVAS_DOMAINS = os.environ.get("ALLOWED_CANVAS_DOMAINS", "").replace(" ", "").split(",")
 
 # The maximum amount of objects the Canvas API will return per page (usually 100)
-MAX_PER_PAGE = int(os.environ.get("MAX_PER_PAGE"))
+MAX_PER_PAGE = int(os.environ.get("MAX_PER_PAGE", 100))
 
 # A secret key used by Flask for signing. KEEP THIS SECRET!
 # (e.g. 'Ro0ibrkb4Z4bZmz1f5g1+/16K19GH/pa')
@@ -20,7 +23,7 @@ LTI_TOOL_ID = os.environ.get("LTI_TOOL_ID") # A unique ID for the tool
 
 # URI for database. (e.g. 'mysql://root:root@localhost/quiz_extensions')
 SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
-SQLALCHEMY_TRACK_MODIFICATIONS = int(os.environ.get("SQLALCHEMY_TRACK_MODIFICATIONS")) == 1
+SQLALCHEMY_TRACK_MODIFICATIONS = int(os.environ.get("SQLALCHEMY_TRACK_MODIFICATIONS", 0)) == 1
 
 GOOGLE_ANALYTICS = os.environ.get("GOOGLE_ANALYTICS")  # The Google Analytics ID to use.
 
@@ -82,5 +85,5 @@ PYLTI_CONFIG = {
 }
 
 # Chrome 80 SameSite=None; Secure fix
-SESSION_COOKIE_SECURE = int(os.environ.get("SESSION_COOKIE_SECURE")) == 1
+SESSION_COOKIE_SECURE = int(os.environ.get("SESSION_COOKIE_SECURE", 1)) == 1
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE")
