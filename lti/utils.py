@@ -5,11 +5,11 @@ import logging
 import math
 from collections import defaultdict
 from logging.config import dictConfig
+
+import requests
 from canvasapi import Canvas
 from canvasapi.quiz import Quiz as CQuiz
 from canvasapi.quiz import QuizExtension
-
-import requests
 
 import config
 from models import Quiz
@@ -24,7 +24,7 @@ json_headers = {
 }
 
 
-def extend_quiz(quiz:CQuiz, percent, user_id_list):
+def extend_quiz(quiz: CQuiz, percent, user_id_list):
     """
     Extends a quiz time by a percentage for a list of users.
 
@@ -61,7 +61,7 @@ def extend_quiz(quiz:CQuiz, percent, user_id_list):
         quiz_extensions.append(user_extension)
 
     try:
-        extensions_res:list[QuizExtension] = quiz.set_extensions(quiz_extensions)
+        extensions_res: list[QuizExtension] = quiz.set_extensions(quiz_extensions)
     except Exception as err:
         msg = "Error creating extension for quiz #{}. Canvas status code: {}"
         return {
@@ -101,7 +101,8 @@ def extend_quiz(quiz:CQuiz, percent, user_id_list):
         }
     """
 
-#all occurances migrated except tests
+
+# all occurances migrated except tests
 def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
     """
     Get all quizzes in a Canvas course.
@@ -135,7 +136,8 @@ def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
 
     return quizzes
 
-#all occurances migrated except tests
+
+# all occurances migrated except tests
 def get_user(course_id, user_id):
     """
     Get a user from canvas by id, with respect to a course.
@@ -156,7 +158,8 @@ def get_user(course_id, user_id):
 
     return response.json()
 
-#all occurances migrated except tests
+
+# all occurances migrated except tests
 def get_course(course_id):
     """
     Get a course from canvas by id.
@@ -192,7 +195,7 @@ def get_or_create(session, model, **kwargs):
         return instance, True
 
 
-def missing_and_stale_quizzes(canvas:Canvas, course_id, quickcheck=False):
+def missing_and_stale_quizzes(canvas: Canvas, course_id, quickcheck=False):
     """
     Find all quizzes that are in Canvas but not in the database (missing),
     or have an old time limit (stale)

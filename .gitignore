@@ -9,3 +9,7 @@
 /logs
 dump.rdb
 *.venv
+lti/nginx.conf
+lti/setup.cfg
+lti/uwsgi.ini
+lti/pyproject.toml

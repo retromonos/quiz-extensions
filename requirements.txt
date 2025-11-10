@@ -1,9 +1,8 @@
-canvasapi==3.3.0
+canvasapi==3.4.0
 Flask==3.0.2
 Flask-Caching==2.1.0
 Flask-Migrate==4.0.5
 Flask-SQLAlchemy==3.1.1
-lxml==4.6.3
 mysqlclient==2.1.0
 git+https://github.com/ucfcdl/pylti.git@roles#egg=PyLTI
 git+https://github.com/ucfopen/pylti1.3.git@master

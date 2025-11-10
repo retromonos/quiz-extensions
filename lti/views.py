@@ -1,16 +1,38 @@
 # -*- coding: utf-8 -*-
+import functools
 import json
 import logging
 from collections import defaultdict
 from functools import wraps
 from logging.config import dictConfig
 from subprocess import call
+from urllib.parse import urlparse
 
 import redis
 import requests
 from canvasapi import Canvas
-from flask import Flask, Response, redirect, render_template, request, session, url_for
+from canvasapi.exceptions import CanvasException
+from flask import (
+    Flask,
+    Response,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from flask_caching import Cache
 from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from pylti1p3.contrib.flask import (
+    FlaskCacheDataStorage,
+    FlaskMessageLaunch,
+    FlaskOIDCLogin,
+    FlaskRequest,
+)
+from pylti1p3.deep_link_resource import DeepLinkResource
+from pylti1p3.tool_config import ToolConfDict
 from pylti.flask import lti
 from redis.exceptions import ConnectionError
 from rq import Queue, get_current_job
@@ -19,7 +41,18 @@ from rq.job import Job
 from sqlalchemy.sql import text
 
 import config
-from models import Course, Extension, Quiz, User, db
+from cli import register_cli
+from models import (
+    Course,
+    Deployment,
+    Extension,
+    Key,
+    KeySet,
+    Quiz,
+    Registration,
+    User,
+    db,
+)
 from utils import (
     extend_quiz,
     get_or_create,
@@ -33,12 +66,12 @@ q = Queue("quizext", connection=conn)
 app = Flask(__name__)
 
 app.config.from_object("config")
-
 dictConfig(config.LOGGING_CONFIG)
 logger = logging.getLogger("app")
-
+cache = Cache(app)
 db.init_app(app)
 migrate = Migrate(app, db)
+register_cli(app)
 
 # CanvasAPI requires /api/v1/ to be removed
 canvas = Canvas(config.API_URL, config.API_KEY)
@@ -48,50 +81,205 @@ json_headers = {
     "Content-type": "application/json",
 }
 
+################################
+# START LTI 1.3 IMPLEMENTATION #
+################################
 
-def check_valid_user(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        #Until we figure out LTI 1.3:
-        return f(*args, **kwargs)
-        """
-        Decorator to check if the user is allowed access to the app.
-        If user is allowed, return the decorated function.
-        Otherwise, return an error page with corresponding message.
-        """
-        canvas_user_id = session.get("canvas_user_id")
-        lti_logged_in = session.get("lti_logged_in", False)
-        if not lti_logged_in or not canvas_user_id:
-            return render_template("error.html", message="Not allowed!")
-        if "course_id" not in kwargs.keys():
-            return render_template("error.html", message="No course_id provided.")
-        course_id = int(kwargs.get("course_id"))
 
-        if not session.get("is_admin", False):
-            enrollments_url = "{}courses/{}/enrollments".format(
-                config.API_URL, course_id
-            )
+def get_lti_config():
+    registrations = Registration.query.all()
 
-            payload = {
-                "user_id": canvas_user_id,
-                "type": ["TeacherEnrollment", "TaEnrollment", "DesignerEnrollment"],
+    from collections import defaultdict
+
+    settings = defaultdict(list)
+    for registration in registrations:
+        settings[registration.issuer].append(
+            {
+                "client_id": registration.client_id,
+                "auth_login_url": registration.platform_login_auth_endpoint,
+                "auth_token_url": registration.platform_service_auth_endpoint,
+                "auth_audience": "null",  # TODO: figure out what this is for?
+                "key_set_url": registration.platform_jwks_endpoint,
+                "key_set": None,
+                "deployment_ids": [d.deployment_id for d in registration.deployments],
             }
+        )
 
-            user_enrollments_response = requests.get(
-                enrollments_url, data=json.dumps(payload), headers=json_headers
-            )
-            user_enrollments = user_enrollments_response.json()
+    # TODO: figure out more elegant way to set public/private keys without double loop
+    tool_conf = ToolConfDict(settings)
+    for registration in registrations:
+        # Currently pylti1.3 only allows one key per client id. For now just set first one.
+        key = registration.key_set.keys[0]
+        tool_conf.set_private_key(
+            registration.issuer,
+            # ensure type is string not bytes (varies based on DB type)
+            (
+                key.private_key
+                if isinstance(key.private_key, str)
+                else key.private_key.decode("utf-8")
+            ),
+            client_id=registration.client_id,
+        )
+        tool_conf.set_public_key(
+            registration.issuer,
+            # ensure type is string not bytes (varies based on DB type)
+            (
+                key.public_key
+                if isinstance(key.public_key, str)
+                else key.public_key.decode("utf-8")
+            ),
+            client_id=registration.client_id,
+        )
+    return tool_conf
 
-            if not user_enrollments or "errors" in user_enrollments:
-                message = (
-                    "You are not enrolled in this course as a Teacher, "
-                    "TA, or Designer."
+
+# LTI 1.3
+def lti_required(role=None):
+    """
+    LTI Protector - only allow access to routes if user has been authenticated and has a launch ID.
+    You can also pass in a role to restrict access to certain roles e.g. @lti_required(role="staff")
+
+    Args:
+        role (str, optional): The role to restrict access to. Defaults to None.
+
+    Returns:
+        function: The decorated function.
+    """
+    # TODO: allow multiple roles simultaneously (e.g. ["staff", "student"])
+    # TODO: Make these roles configurable via settings, with some defaults
+    role_config = {
+        "admin": [
+            "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Administrator",
+            "http://purl.imsglobal.org/vocab/lis/v2/membership#Administrator",
+        ],
+        "staff": [
+            "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Administrator",
+            "http://purl.imsglobal.org/vocab/lis/v2/membership#Administrator",
+            "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+        ],
+        "student": ["http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"],
+    }
+
+    def decorator(func):
+        @functools.wraps(func)
+        def secure_function(*args, **kwargs):
+            # Ensure the requested role is in the role configuration. This is mostly for if we publish this code elsewhere.
+            if role not in role_config:
+                app.logger.error(f"Invalid role: {role}")
+                return (
+                    "<h2>Unauthorized</h2><p>Invalid role configuration. Please contact support.</p>",
+                    401,
                 )
-                return render_template("error.html", message=message)
 
-        return f(*args, **kwargs)
+            if "launch_id" not in session:
+                return (
+                    # TODO: improve this message to be more user-friendly
+                    "<h2>Unauthorized</h2><p>You must use this tool in an LTI context.</p>",
+                    401,
+                )
 
-    return decorated_function
+            if "roles" not in session:
+                return (
+                    "<h2>Unauthorized</h2><p>No roles found.</p>",
+                    401,
+                )
+
+            if not any(
+                role_vocab in session["roles"] for role_vocab in role_config[role]
+            ):
+                return (
+                    f"<h2>Unauthorized</h2><p>You must be have the {role} role to use this tool.</p>",
+                    401,
+                )
+
+            return func(*args, **kwargs)
+
+        return secure_function
+
+    return decorator
+
+
+# LTI 1.3
+class ExtendedFlaskMessageLaunch(FlaskMessageLaunch):
+    def validate_nonce(self):
+        """
+        Used to bypass nonce validation for canvas.
+
+        """
+        iss = self.get_iss()
+        if iss == "https://canvas.instructure.com":
+            return self
+        return super().validate_nonce()
+
+
+def get_launch_data_storage():
+    return FlaskCacheDataStorage(cache)
+
+
+# OIDC Login
+@app.route("/login/", methods=["GET", "POST"])
+def login():
+    tool_conf = get_lti_config()
+    launch_data_storage = get_launch_data_storage()
+    flask_request = FlaskRequest()
+    target_link_uri = flask_request.get_param("target_link_uri")
+
+    if not target_link_uri:
+        raise Exception('Missing "target_link_uri" param')
+
+    oidc_login = FlaskOIDCLogin(
+        flask_request, tool_conf, launch_data_storage=launch_data_storage
+    )
+
+    return oidc_login.enable_check_cookies(
+        main_msg="Your browser prohibits saving cookies in an iframe.",
+        click_msg="Click here to open the application in a new tab.",
+    ).redirect(target_link_uri)
+
+
+@app.route("/launch/", methods=["POST"])
+def launch():
+    tool_conf = get_lti_config()
+
+    flask_request = FlaskRequest()
+    launch_data_storage = get_launch_data_storage()
+    message_launch = ExtendedFlaskMessageLaunch(
+        flask_request, tool_conf, launch_data_storage=launch_data_storage
+    )
+
+    session["canvas_email"] = message_launch.get_launch_data().get("email")
+    session["error"] = False
+    session["roles"] = message_launch.get_launch_data().get(
+        "https://purl.imsglobal.org/spec/lti/claim/roles"
+    )
+    session["launch_id"] = message_launch.get_launch_id()
+    session["course_id"] = message_launch.get_launch_data()[
+        "https://purl.imsglobal.org/spec/lti/claim/custom"
+    ]["canvas_course_id"]
+    session["canvas_user_id"] = message_launch.get_launch_data()[
+        "https://purl.imsglobal.org/spec/lti/claim/custom"
+    ]["canvas_user_id"]
+
+    # Redirect to the quiz for your course
+    return redirect(url_for("quiz", course_id=session["course_id"]))
+
+
+@app.route("/lticonfig/", methods=["GET"])
+def config():
+    domain = urlparse(request.url_root).netloc
+    return Response(
+        render_template(
+            "lti.json",
+            domain=domain,
+            url_scheme=app.config["PREFERRED_URL_SCHEME"],
+        ),
+        mimetype="application/json",
+    )
+
+
+@app.route("/jwks/", methods=["GET"])
+def get_jwks():
+    return get_lti_config().get_jwks()
 
 
 def error(exception=None):
@@ -106,8 +294,11 @@ def error(exception=None):
 
 
 @app.context_processor
-def add_google_analytics_id():
-    return dict(GOOGLE_ANALYTICS=config.GOOGLE_ANALYTICS)
+def utility_processor():
+    def google_analytics():
+        return app.config["GOOGLE_ANALYTICS"]
+
+    return dict(google_analytics=google_analytics())
 
 
 @app.route("/", methods=["POST", "GET"])
@@ -147,7 +338,6 @@ def status():  # pragma: no cover
 
     # Check index
     try:
-        logger.debug(url_for("index", _external=True))
         response = requests.get(url_for("index", _external=True), verify=False)
         status["checks"]["index"] = (
             response.text == "Please contact your System Administrator."
@@ -200,6 +390,7 @@ def status():  # pragma: no cover
     return Response(json.dumps(status), mimetype="application/json")
 
 
+# TODO: Remove LTI 1.1 XML once 1.3 is implemented
 @app.route("/lti.xml", methods=["GET"])
 def xml():
     """
@@ -216,8 +407,7 @@ def xml():
 
 
 @app.route("/quiz/<course_id>/", methods=["GET"])
-@check_valid_user
-#@lti(error=error, request="session", role="staff", app=app)
+@lti_required(role="staff")
 def quiz(lti=lti, course_id=None):
     """
     Main landing page for the app.
@@ -247,8 +437,7 @@ def refresh(course_id=None):
 
 
 @app.route("/update/<course_id>/", methods=["POST"])
-@check_valid_user
-#@lti(error=error, request="session", role="staff", app=app)
+@lti_required(role="staff")
 def update(lti=lti, course_id=None):
     """
     Creates a new `update_background` job.
@@ -650,8 +839,7 @@ def missing_and_stale_quizzes_check(course_id):
 
 
 @app.route("/filter/<course_id>/", methods=["GET"])
-@check_valid_user
-#@lti(error=error, request="session", role="staff", app=app)
+@lti_required(role="staff")
 def filter(lti=lti, course_id=None):
     """
     Display a filtered and paginated list of students in the course.
@@ -672,32 +860,3 @@ def filter(lti=lti, course_id=None):
     )
 
     return render_template("user_list.html", users=user_list)
-
-
-@app.route("/launch", methods=["POST"])
-#@lti(error=error, request="initial", role="staff", app=app)
-def lti_tool(lti=lti):
-    """
-    Bootstrapper for lti.
-    """
-    course_id = request.values.get("custom_canvas_course_id")
-    canvas_user_id = request.values.get("custom_canvas_user_id")
-    canvas_domain = request.values.get("custom_canvas_api_domain")
-
-    if canvas_domain not in config.ALLOWED_CANVAS_DOMAINS:
-        msg = (
-            "<p>This tool is only available from the following domain(s):<br/>{}</p>"
-            "<p>You attempted to access from this domain:<br/>{}</p>"
-        )
-        return render_template(
-            "error.html",
-            message=msg.format(", ".join(config.ALLOWED_CANVAS_DOMAINS), canvas_domain),
-        )
-
-    roles = request.values.get("roles", [])
-
-    session["is_admin"] = "Administrator" in roles
-    session["canvas_user_id"] = canvas_user_id
-    session["lti_logged_in"] = True
-
-    return redirect(url_for("quiz", course_id=course_id))

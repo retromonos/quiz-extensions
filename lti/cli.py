@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 def register_cli(app: Flask):
     @app.cli.command("generate_keys")
     def generate_keys():
-        from main import Key, KeySet, db
+        from models import Key, KeySet, db
 
         def get_keyset():
             all_keysets = KeySet.query.all()
@@ -87,7 +87,7 @@ def register_cli(app: Flask):
 
     @app.cli.command("register")
     def add_registration():
-        from main import KeySet, Registration, db
+        from models import KeySet, Registration, db
 
         platform_options = [
             {
@@ -183,7 +183,7 @@ def register_cli(app: Flask):
 
     @app.cli.command("deploy")
     def add_deployment():
-        from main import Deployment, Registration, db
+        from models import Deployment, Registration, db
 
         print("Which registration would you like to add a deployment for?")
         for registration in Registration.query.all():

@@ -80,6 +80,15 @@ migrate-run: ## Run an existing DB migration
 shell: ## Run shell in Flask context
 	${DOCKER_COMPOSE} run --rm quiz_extensions flask shell
 
+generate-keys: ## Create new public and private keys and assign them to a keyset
+	${DOCKER_COMPOSE} run --rm quiz_extensions flask generate_keys
+
+register: ## Add a new registration for Quiz Extensions in a platform
+	${DOCKER_COMPOSE} run --rm quiz_extensions flask register
+
+deploy: ## Add a new deployment for Quiz Extensions to an existing registration
+	${DOCKER_COMPOSE} run --rm quiz_extensions flask deploy
+
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
