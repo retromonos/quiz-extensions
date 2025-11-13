@@ -59,9 +59,6 @@ REDIS_URL="redis://example_redis:6379"
 DEBUG=0
 TESTING=0
 
-#comma delineated
-ALLOWED_CANVAS_DOMAINS="example.edu,canvas.example.edu"
-
 TESTING_API_URL="https://example.edu"
 
 API_KEY="CHANGEME"

@@ -3,7 +3,6 @@ import functools
 import json
 import logging
 from collections import defaultdict
-from functools import wraps
 from logging.config import dictConfig
 from subprocess import call
 from urllib.parse import urlparse
@@ -18,20 +17,17 @@ from flask import (
     redirect,
     render_template,
     request,
-    send_file,
     session,
     url_for,
 )
 from flask_caching import Cache
 from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
 from pylti1p3.contrib.flask import (
     FlaskCacheDataStorage,
     FlaskMessageLaunch,
     FlaskOIDCLogin,
     FlaskRequest,
 )
-from pylti1p3.deep_link_resource import DeepLinkResource
 from pylti1p3.tool_config import ToolConfDict
 from pylti.flask import lti
 from redis.exceptions import ConnectionError
@@ -44,10 +40,7 @@ import config
 from cli import register_cli
 from models import (
     Course,
-    Deployment,
     Extension,
-    Key,
-    KeySet,
     Quiz,
     Registration,
     User,
@@ -137,7 +130,8 @@ def get_lti_config():
 def lti_required(role=None):
     """
     LTI Protector - only allow access to routes if user has been authenticated and has a launch ID.
-    You can also pass in a role to restrict access to certain roles e.g. @lti_required(role="staff")
+    You can also pass in a role to restrict access to certain roles
+    e.g. @lti_required(role="staff")
 
     Args:
         role (str, optional): The role to restrict access to. Defaults to None.
@@ -163,7 +157,8 @@ def lti_required(role=None):
     def decorator(func):
         @functools.wraps(func)
         def secure_function(*args, **kwargs):
-            # Ensure the requested role is in the role configuration. This is mostly for if we publish this code elsewhere.
+            # Ensure the requested role is in the role configuration.
+            # This is mostly for if we publish this code elsewhere.
             if role not in role_config:
                 app.logger.error(f"Invalid role: {role}")
                 return (
@@ -207,7 +202,10 @@ class ExtendedFlaskMessageLaunch(FlaskMessageLaunch):
 
         """
         iss = self.get_iss()
-        if iss == "https://canvas.instructure.com":
+        if (
+            iss == "https://canvas.instructure.com"
+            or iss == "https://canvas.test.instructure.com"
+        ):
             return self
         return super().validate_nonce()
 
@@ -265,7 +263,7 @@ def launch():
 
 
 @app.route("/lticonfig/", methods=["GET"])
-def config():
+def get_config():
     domain = urlparse(request.url_root).netloc
     return Response(
         render_template(
@@ -323,7 +321,7 @@ def status():  # pragma: no cover
         "tool": "Quiz Extensions",
         "checks": {
             "index": False,
-            "xml": False,
+            "lticonfig": False,
             "api_key": False,
             "redis": False,
             "db": False,
@@ -332,7 +330,7 @@ def status():  # pragma: no cover
         "url": url_for("index", _external=True),
         "api_url": config.API_URL,
         "debug": app.debug,
-        "xml_url": url_for("xml", _external=True),
+        "config_url": url_for("lticonfig", _external=True),
         "job_queue": job_queue_length,
     }
 
@@ -345,14 +343,14 @@ def status():  # pragma: no cover
     except Exception:
         logger.exception("Index check failed.")
 
-    # Check xml
+    # Check LTI Config
     try:
-        response = requests.get(url_for("xml", _external=True), verify=False)
-        status["checks"]["xml"] = "application/xml" in response.headers.get(
+        response = requests.get(url_for("lticonfig", _external=True), verify=False)
+        status["checks"]["lticonfig"] = "application/json" in response.headers.get(
             "Content-Type"
         )
     except Exception:
-        logger.exception("XML check failed.")
+        logger.exception("LTI Config check failed.")
 
     # Check API Key
     try:
@@ -388,22 +386,6 @@ def status():  # pragma: no cover
     status["healthy"] = all(v is True for k, v in status["checks"].items())
 
     return Response(json.dumps(status), mimetype="application/json")
-
-
-# TODO: Remove LTI 1.1 XML once 1.3 is implemented
-@app.route("/lti.xml", methods=["GET"])
-def xml():
-    """
-    Returns the lti.xml file for the app.
-    """
-    from urllib.parse import urlparse
-
-    domain = urlparse(request.url_root).netloc
-
-    return Response(
-        render_template("lti.xml", tool_id=config.LTI_TOOL_ID, domain=domain),
-        mimetype="application/xml",
-    )
 
 
 @app.route("/quiz/<course_id>/", methods=["GET"])
@@ -583,11 +565,26 @@ def update_background(course_id, extension_dict):
             db.session.commit()
 
         quizzes = list(course_obj.get_quizzes())
+
+        # New Quizzes might not be implemented on a given installation
+        try:
+            new_quizzes = list(course_obj.get_new_quizzes())
+        except CanvasException:
+            logger.error(
+                "Error fetching New Quizzes. Your Canvas installation may not support them."
+            )
+            new_quizzes = []
+
+        all_quizzes = quizzes + new_quizzes
+
         num_quizzes = len(quizzes)
+        num_nquizzes = len(new_quizzes)
+        total_quizzes = num_nquizzes + num_quizzes
+
         quiz_time_list = []
         unchanged_quiz_time_list = []
 
-        if num_quizzes < 1:
+        if total_quizzes < 1:
             update_job(
                 job,
                 0,
@@ -600,7 +597,23 @@ def update_background(course_id, extension_dict):
             )
             return job.meta
 
-        for index, quiz in enumerate(quizzes):
+        for index, quiz in enumerate(all_quizzes):
+            # Is true if the quiz is a New Quiz
+            is_new = index >= num_quizzes
+
+            if is_new:
+                settings = quiz.__getattribute__("quiz_settings").__dict__
+                if settings.__getattribute__("has_time_limit"):
+                    # Divide by 60 because Canvas stores new quiz timers in seconds
+                    quiz.__setattr__(
+                        "time_limit", settings["session_time_limit_in_seconds"] / 60
+                    )
+                else:
+                    quiz.__setattr__("time_limit", 0)
+                logger.debug(
+                    f"set new quiz time limit to {quiz.__getattribute__('time_limit')} minutes"
+                )
+
             quiz_id = quiz.id
             quiz_title = quiz.title
 
@@ -609,12 +622,12 @@ def update_background(course_id, extension_dict):
             update_job(
                 job,
                 comp_perc,
-                updating_str.format(quiz_id, quiz_title, index + 1, num_quizzes),
+                updating_str.format(quiz_id, quiz_title, index + 1, total_quizzes),
                 "processing",
                 error=False,
             )
 
-            extension_response = extend_quiz(quiz, percent, user_ids)
+            extension_response = extend_quiz(quiz, is_new, percent, user_ids)
 
             if extension_response.get("success", False) is True:
                 # add/update quiz
@@ -685,6 +698,7 @@ def refresh_background(course_id):
     with app.app_context():
         course, created = get_or_create(db.session, Course, canvas_id=course_id)
         try:
+            # Get course object, refresh name
             course_obj = canvas.get_course(course_id)
             course_name = course_obj.name
             course.course_name = course_name
@@ -695,6 +709,7 @@ def refresh_background(course_id):
 
             return job.meta
 
+        # Return both legacy and new quizzes
         quizzes = missing_and_stale_quizzes(canvas, course_id)
 
         num_quizzes = len(quizzes)
@@ -764,6 +779,7 @@ def refresh_background(course_id):
                 inactive_list.append(extension.user.sortable_name)
                 continue
 
+            # Maps percentage amounts of extensions to their users
             percent_user_map[extension.percent].append(user_canvas_id)
 
         if len(percent_user_map) < 1:
@@ -777,6 +793,10 @@ def refresh_background(course_id):
             return job.meta
 
         for index, quiz in enumerate(quizzes):
+            # Is true if the quiz is a New Quiz
+            # is_new is set in the missing_and_stale_quizzes() function
+            is_new = quiz.__getattribute__("is_new")
+
             quiz_id = quiz.id
             quiz_title = quiz.title
 
@@ -791,7 +811,7 @@ def refresh_background(course_id):
             )
 
             for percent, user_list in percent_user_map.items():
-                extension_response = extend_quiz(quiz, percent, user_list)
+                extension_response = extend_quiz(quiz, is_new, percent, user_list)
 
                 if extension_response.get("success", False) is True:
                     # add/update quiz

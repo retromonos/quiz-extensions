@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import json
 import logging
 import math
-from collections import defaultdict
 from logging.config import dictConfig
 
 import requests
 from canvasapi import Canvas
-from canvasapi.quiz import Quiz as CQuiz
-from canvasapi.quiz import QuizExtension
+from canvasapi.exceptions import CanvasException
 
 import config
 from models import Quiz
@@ -24,12 +21,14 @@ json_headers = {
 }
 
 
-def extend_quiz(quiz: CQuiz, percent, user_id_list):
+def extend_quiz(quiz, is_new: bool, percent, user_id_list):
     """
     Extends a quiz time by a percentage for a list of users.
 
     :param quiz: A quiz object from Canvas
     :type quiz: dict
+    :param is_new: Flag for if we are extending a either Classic or New Quiz.
+    :type is_new: bool
     :param percent: The percent of original quiz time to be applied.
         e.g. 200 is double time, 100 is normal time, <100 is invalid.
     :type percent: int
@@ -43,11 +42,16 @@ def extend_quiz(quiz: CQuiz, percent, user_id_list):
         - added_time `int` The amount of time added in minutes. Returns
         `None` if there was no time added.
     """
+    # Debugging tag for new/classic quiz
+    tag = "Classic"
+    if is_new:
+        tag = "New"
+
     quiz_id = quiz.id
     time_limit = quiz.__getattribute__("time_limit")
 
     if time_limit is None or time_limit < 1:
-        msg = "Quiz #{} has no time limit, so there is no time to add."
+        msg = tag + " Quiz #{} has no time limit, so there is no time to add."
         return {"success": True, "message": msg.format(quiz_id), "added_time": None}
 
     added_time = int(
@@ -61,45 +65,27 @@ def extend_quiz(quiz: CQuiz, percent, user_id_list):
         quiz_extensions.append(user_extension)
 
     try:
-        extensions_res: list[QuizExtension] = quiz.set_extensions(quiz_extensions)
+        # Change accomodation function based on if this is a new quiz
+        if is_new:
+            quiz.set_accomodations(quiz_extensions)
+        else:
+            quiz.set_extensions(quiz_extensions)
     except Exception as err:
-        msg = "Error creating extension for quiz #{}. Canvas status code: {}"
+        msg = (
+            "Error creating extension for " + tag + " Quiz #{}. Canvas status code: {}"
+        )
         return {
             "success": False,
             "message": msg.format(quiz_id, err),
             "added_time": None,
         }
 
-    msg = "Successfully added {} minutes to quiz #{}"
+    msg = "Successfully added {} minutes to " + tag + " Quiz #{}"
     return {
         "success": True,
         "message": msg.format(added_time, quiz_id),
         "added_time": added_time,
     }
-
-    """
-    url_str = "{}/api/v1/courses/{}/quizzes/{}/extensions"
-    extensions_response = requests.post(
-        url_str.format(config.API_URL, course_id, quiz_id),
-        data=json.dumps(quiz_extensions),
-        headers=json_headers,
-    )
-
-    if extensions_response.status_code == 200:
-        msg = "Successfully added {} minutes to quiz #{}"
-        return {
-            "success": True,
-            "message": msg.format(added_time, quiz_id),
-            "added_time": added_time,
-        }
-    else:
-        msg = "Error creating extension for quiz #{}. Canvas status code: {}"
-        return {
-            "success": False,
-            "message": msg.format(quiz_id, extensions_response.status_code),
-            "added_time": None,
-        }
-    """
 
 
 # all occurances migrated except tests
@@ -214,9 +200,25 @@ def missing_and_stale_quizzes(canvas: Canvas, course_id, quickcheck=False):
     course_obj = canvas.get_course(course_id)
     quizzes = list(course_obj.get_quizzes())
 
+    # New Quizzes might not be implemented on a given installation
+    try:
+        new_quizzes = list(course_obj.get_new_quizzes())
+    except CanvasException:
+        logger.error(
+            "Error fetching New Quizzes. Your Canvas installation may not support them."
+        )
+        new_quizzes = []
+
+    all_quizzes = quizzes + new_quizzes
+
+    num_quizzes = len(quizzes)
+
     missing_list = []
 
-    for canvas_quiz in quizzes:
+    for index, canvas_quiz in enumerate(all_quizzes):
+        # Is true if the quiz is a New Quiz
+        canvas_quiz.__setattr__("is_new", index >= num_quizzes)
+
         quiz = Quiz.query.filter_by(canvas_id=canvas_quiz.id).first()
 
         # quiz is missing or time limit has changed

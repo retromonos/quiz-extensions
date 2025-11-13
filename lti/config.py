@@ -66,8 +66,9 @@ LOGGING_CONFIG = {
     },
 }
 
-TESTING_API_URL = os.environ.get("TESTING_API_URL")  # Used only to run tests
-
+# Used only to run tests
+TESTING_API_URL = os.environ.get("TESTING_API_URL")  
+TESTING_API_KEY = os.environ.get("TESTING_API_KEY")
 
 CONSUMER_KEY = os.environ.get("CONSUMER_KEY", "key")
 SHARED_SECRET = os.environ.get("SHARED_SECRET", "secret")
