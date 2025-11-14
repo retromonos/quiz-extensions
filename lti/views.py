@@ -29,7 +29,6 @@ from pylti1p3.contrib.flask import (
     FlaskRequest,
 )
 from pylti1p3.tool_config import ToolConfDict
-from pylti.flask import lti
 from redis.exceptions import ConnectionError
 from rq import Queue, get_current_job
 from rq.exceptions import NoSuchJobError
@@ -321,7 +320,7 @@ def status():  # pragma: no cover
         "tool": "Quiz Extensions",
         "checks": {
             "index": False,
-            "lticonfig": False,
+            #"lticonfig": False,
             "api_key": False,
             "redis": False,
             "db": False,
@@ -330,7 +329,7 @@ def status():  # pragma: no cover
         "url": url_for("index", _external=True),
         "api_url": config.API_URL,
         "debug": app.debug,
-        "config_url": url_for("lticonfig", _external=True),
+        #"config_url": url_for("lticonfig", _external=True),
         "job_queue": job_queue_length,
     }
 
@@ -343,6 +342,7 @@ def status():  # pragma: no cover
     except Exception:
         logger.exception("Index check failed.")
 
+    """
     # Check LTI Config
     try:
         response = requests.get(url_for("lticonfig", _external=True), verify=False)
@@ -351,6 +351,7 @@ def status():  # pragma: no cover
         )
     except Exception:
         logger.exception("LTI Config check failed.")
+    """
 
     # Check API Key
     try:
@@ -390,7 +391,7 @@ def status():  # pragma: no cover
 
 @app.route("/quiz/<course_id>/", methods=["GET"])
 @lti_required(role="staff")
-def quiz(lti=lti, course_id=None):
+def quiz(course_id=None):
     """
     Main landing page for the app.
 
@@ -420,7 +421,7 @@ def refresh(course_id=None):
 
 @app.route("/update/<course_id>/", methods=["POST"])
 @lti_required(role="staff")
-def update(lti=lti, course_id=None):
+def update(course_id=None):
     """
     Creates a new `update_background` job.
 
@@ -860,7 +861,7 @@ def missing_and_stale_quizzes_check(course_id):
 
 @app.route("/filter/<course_id>/", methods=["GET"])
 @lti_required(role="staff")
-def filter(lti=lti, course_id=None):
+def filter(course_id=None):
     """
     Display a filtered and paginated list of students in the course.
 

@@ -13,10 +13,8 @@
 ### Backstage
 
 - Replaced our Canvas API utility functions with the proper PyPi *Canvas API* package.
-- The project has been properly Dockerized now.
-  - The base Python image is using Python 3.11.
-  - Redis image is running on latest.
-  - MySQL image is running version 8.2.0.
+- The project has been properly Dockerized now, and upgraded to run Python 3.12.
+- Now uses gunicorn as our WSGI server.
 - Added a Makefile with commands for various build/deploy/test functions, based off of the UCF Open LTI 1.3 Flask template.
 - config.py has been updated to use a .env file, please see *.env.template*.
 

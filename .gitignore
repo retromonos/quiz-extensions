@@ -14,3 +14,4 @@ lti/setup.cfg
 lti/uwsgi.ini
 lti/pyproject.toml
 lti/prestart.sh
+lti/gunicorn_conf.py

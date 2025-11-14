@@ -12,3 +12,4 @@ rq==2.6.0
 Werkzeug==3.0.1
 SQLAlchemy==2.0.44
 pycryptodome
+gunicorn==23.0.0

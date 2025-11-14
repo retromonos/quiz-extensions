@@ -4,6 +4,15 @@ volumes:
   local_mysql_data: {}
 
 services:
+  nginx:
+    image: nginx
+    volumes:
+      - ./devops/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - quiz_extensions
   quiz_db:
     image: mysql:8.2.0
     platform: linux/amd64
@@ -16,6 +25,11 @@ services:
       MYSQL_PASSWORD: password
     ports:
       - 3306:3306
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 3s
+      retries: 5
+      timeout: 20s
   quiz_redis:
     image: redis
     ports:
@@ -34,8 +48,8 @@ services:
         source: ./pyproject.toml
         target: /app/pyproject.toml
       - type: bind
-        source: ./devops/uwsgi.ini
-        target: /app/uwsgi.ini
+        source: ./devops/gunicorn_conf.py
+        target: /app/gunicorn_conf.py
       - type: bind
         source: ./devops/prestart.sh
         target: /app/prestart.sh
@@ -45,10 +59,10 @@ services:
       - MODULE_NAME=app
       - FLASK_APP=views.py
     ports:
-      - "8000:80"
+      - "8000:8000"
     depends_on:
       quiz_db:
-        condition: service_started
+        condition: service_healthy
         restart: true
       quiz_redis:
         condition: service_started
