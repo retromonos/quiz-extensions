@@ -26,7 +26,7 @@ def extend_quiz(quiz, is_new: bool, percent, user_id_list):
     Extends a quiz time by a percentage for a list of users.
 
     :param quiz: A quiz object from Canvas
-    :type quiz: dict
+    :type quiz: Quiz | NewQuiz
     :param is_new: Flag for if we are extending a either Classic or New Quiz.
     :type is_new: bool
     :param percent: The percent of original quiz time to be applied.
@@ -74,6 +74,7 @@ def extend_quiz(quiz, is_new: bool, percent, user_id_list):
         msg = (
             "Error creating extension for " + tag + " Quiz #{}. Canvas status code: {}"
         )
+        logger.exception("Test Exception")
         return {
             "success": False,
             "message": msg.format(quiz_id, err),

@@ -205,6 +205,7 @@ class ExtendedFlaskMessageLaunch(FlaskMessageLaunch):
         if (
             iss == "https://canvas.instructure.com"
             or iss == "https://canvas.test.instructure.com"
+            or iss == "https://canvas.beta.instructure.com"
         ):
             return self
         return super().validate_nonce()
@@ -573,6 +574,11 @@ def update_background(course_id, extension_dict):
         course_name = course_obj.name
 
         user_ids = extension_dict.get("user_ids", [])
+
+        #New Quizzes requires an int-type ID
+        for i, id in enumerate(user_ids):
+            user_ids[i] = int(id)
+
         percent = extension_dict.get("percent", None)
 
         if not percent:
