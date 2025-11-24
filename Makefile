@@ -54,7 +54,7 @@ logs: ## View container logs (optionally specifying a service name, like `quiz_e
 #==============================================
 
 test-all: ## Run all unit tests
-	$(DOCKER_COMPOSE) run --rm quiz_extensions pytest 
+	$(DOCKER_COMPOSE) run --rm quiz_extensions python -m unittest
 
 lint: ## Run Python linter (flake8)
 	${DOCKER_COMPOSE} run --rm quiz_extensions flake8 .

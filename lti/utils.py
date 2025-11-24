@@ -67,7 +67,7 @@ def extend_quiz(quiz, is_new: bool, percent, user_id_list):
     try:
         # Change accomodation function based on if this is a new quiz
         if is_new:
-            quiz.set_accomodations(quiz_extensions)
+            quiz.set_accommodations(quiz_extensions)
         else:
             quiz.set_extensions(quiz_extensions)
     except Exception as err:
@@ -217,7 +217,20 @@ def missing_and_stale_quizzes(canvas: Canvas, course_id, quickcheck=False):
 
     for index, canvas_quiz in enumerate(all_quizzes):
         # Is true if the quiz is a New Quiz
-        canvas_quiz.__setattr__("is_new", index >= num_quizzes)
+        is_new = index >= num_quizzes
+        canvas_quiz.__setattr__("is_new", is_new)
+        if is_new:
+            settings = canvas_quiz.__getattribute__("quiz_settings")
+            if settings["has_time_limit"]:
+                # Divide by 60 because Canvas stores new quiz timers in seconds
+                canvas_quiz.__setattr__(
+                    "time_limit", settings["session_time_limit_in_seconds"] / 60
+                )
+            else:
+                canvas_quiz.__setattr__("time_limit", 0)
+            logger.debug(
+                f"set new quiz time limit to {canvas_quiz.__getattribute__('time_limit')} minutes"
+            )
 
         quiz = Quiz.query.filter_by(canvas_id=canvas_quiz.id).first()
 

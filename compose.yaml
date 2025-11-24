@@ -29,7 +29,7 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 3s
       retries: 5
-      timeout: 20s
+      timeout: 10s
   quiz_redis:
     image: redis
     ports:

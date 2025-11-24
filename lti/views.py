@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import redis
 import requests
 from canvasapi import Canvas
-from canvasapi.exceptions import CanvasException
+from canvasapi.exceptions import CanvasException, ResourceDoesNotExist
 from flask import (
     Flask,
     Response,
@@ -62,6 +62,7 @@ dictConfig(config.LOGGING_CONFIG)
 logger = logging.getLogger("app")
 cache = Cache(app)
 db.init_app(app)
+
 migrate = Migrate(app, db)
 register_cli(app)
 
@@ -212,274 +213,323 @@ class ExtendedFlaskMessageLaunch(FlaskMessageLaunch):
 def get_launch_data_storage():
     return FlaskCacheDataStorage(cache)
 
+def init_views(app):
+    # OIDC Login
+    @app.route("/login/", methods=["GET", "POST"])
+    def login():
+        tool_conf = get_lti_config()
+        launch_data_storage = get_launch_data_storage()
+        flask_request = FlaskRequest()
+        target_link_uri = flask_request.get_param("target_link_uri")
 
-# OIDC Login
-@app.route("/login/", methods=["GET", "POST"])
-def login():
-    tool_conf = get_lti_config()
-    launch_data_storage = get_launch_data_storage()
-    flask_request = FlaskRequest()
-    target_link_uri = flask_request.get_param("target_link_uri")
+        if not target_link_uri:
+            raise Exception('Missing "target_link_uri" param')
 
-    if not target_link_uri:
-        raise Exception('Missing "target_link_uri" param')
+        oidc_login = FlaskOIDCLogin(
+            flask_request, tool_conf, launch_data_storage=launch_data_storage
+        )
 
-    oidc_login = FlaskOIDCLogin(
-        flask_request, tool_conf, launch_data_storage=launch_data_storage
-    )
-
-    return oidc_login.enable_check_cookies(
-        main_msg="Your browser prohibits saving cookies in an iframe.",
-        click_msg="Click here to open the application in a new tab.",
-    ).redirect(target_link_uri)
-
-
-@app.route("/launch/", methods=["POST"])
-def launch():
-    tool_conf = get_lti_config()
-
-    flask_request = FlaskRequest()
-    launch_data_storage = get_launch_data_storage()
-    message_launch = ExtendedFlaskMessageLaunch(
-        flask_request, tool_conf, launch_data_storage=launch_data_storage
-    )
-
-    session["canvas_email"] = message_launch.get_launch_data().get("email")
-    session["error"] = False
-    session["roles"] = message_launch.get_launch_data().get(
-        "https://purl.imsglobal.org/spec/lti/claim/roles"
-    )
-    session["launch_id"] = message_launch.get_launch_id()
-    session["course_id"] = message_launch.get_launch_data()[
-        "https://purl.imsglobal.org/spec/lti/claim/custom"
-    ]["canvas_course_id"]
-    session["canvas_user_id"] = message_launch.get_launch_data()[
-        "https://purl.imsglobal.org/spec/lti/claim/custom"
-    ]["canvas_user_id"]
-
-    # Redirect to the quiz for your course
-    return redirect(url_for("quiz", course_id=session["course_id"]))
+        return oidc_login.enable_check_cookies(
+            main_msg="Your browser prohibits saving cookies in an iframe.",
+            click_msg="Click here to open the application in a new tab.",
+        ).redirect(target_link_uri)
 
 
-@app.route("/lticonfig/", methods=["GET"])
-def get_config():
-    domain = urlparse(request.url_root).netloc
-    return Response(
-        render_template(
-            "lti.json",
-            domain=domain,
-            url_scheme=app.config["PREFERRED_URL_SCHEME"],
-        ),
-        mimetype="application/json",
-    )
+    @app.route("/launch/", methods=["POST"])
+    def launch():
+        tool_conf = get_lti_config()
+
+        flask_request = FlaskRequest()
+        launch_data_storage = get_launch_data_storage()
+        message_launch = ExtendedFlaskMessageLaunch(
+            flask_request, tool_conf, launch_data_storage=launch_data_storage
+        )
+
+        session["canvas_email"] = message_launch.get_launch_data().get("email")
+        session["error"] = False
+        session["roles"] = message_launch.get_launch_data().get(
+            "https://purl.imsglobal.org/spec/lti/claim/roles"
+        )
+        session["launch_id"] = message_launch.get_launch_id()
+        session["course_id"] = message_launch.get_launch_data()[
+            "https://purl.imsglobal.org/spec/lti/claim/custom"
+        ]["canvas_course_id"]
+        session["canvas_user_id"] = message_launch.get_launch_data()[
+            "https://purl.imsglobal.org/spec/lti/claim/custom"
+        ]["canvas_user_id"]
+
+        # Redirect to the quiz for your course
+        return redirect(url_for("quiz", course_id=session["course_id"]))
 
 
-@app.route("/jwks/", methods=["GET"])
-def get_jwks():
-    return get_lti_config().get_jwks()
-
-
-def error(exception=None):
-    return Response(
-        render_template(
-            "error.html",
-            message=exception.get(
-                "exception", "Please contact your System Administrator."
+    @app.route("/lticonfig/", methods=["GET"])
+    def get_config():
+        domain = urlparse(request.url_root).netloc
+        return Response(
+            render_template(
+                "lti.json",
+                domain=domain,
+                url_scheme=app.config["PREFERRED_URL_SCHEME"],
             ),
+            mimetype="application/json",
         )
-    )
 
 
-@app.context_processor
-def utility_processor():
-    def google_analytics():
-        return app.config["GOOGLE_ANALYTICS"]
-
-    return dict(google_analytics=google_analytics())
+    @app.route("/jwks/", methods=["GET"])
+    def get_jwks():
+        return get_lti_config().get_jwks()
 
 
-@app.route("/", methods=["POST", "GET"])
-def index():
-    """
-    Default app index.
-    """
-    return "Please contact your System Administrator."
-
-
-@app.route("/status", methods=["GET"])
-def status():  # pragma: no cover
-    """
-    Runs smoke tests and reports status
-    """
-    try:
-        job_queue_length = len(q.jobs)
-    except ConnectionError:
-        job_queue_length = -1
-
-    status = {
-        "tool": "Quiz Extensions",
-        "checks": {
-            "index": False,
-            #"lticonfig": False,
-            "api_key": False,
-            "redis": False,
-            "db": False,
-            "worker": False,
-        },
-        "url": url_for("index", _external=True),
-        "api_url": config.API_URL,
-        "debug": app.debug,
-        #"config_url": url_for("lticonfig", _external=True),
-        "job_queue": job_queue_length,
-    }
-
-    # Check index
-    try:
-        response = requests.get(url_for("index", _external=True), verify=False)
-        status["checks"]["index"] = (
-            response.text == "Please contact your System Administrator."
+    def error(exception=None):
+        return Response(
+            render_template(
+                "error.html",
+                message=exception.get(
+                    "exception", "Please contact your System Administrator."
+                ),
+            )
         )
-    except Exception:
-        logger.exception("Index check failed.")
 
-    """
-    # Check LTI Config
-    try:
-        response = requests.get(url_for("lticonfig", _external=True), verify=False)
-        status["checks"]["lticonfig"] = "application/json" in response.headers.get(
-            "Content-Type"
+
+    @app.context_processor
+    def utility_processor():
+        def google_analytics():
+            return app.config["GOOGLE_ANALYTICS"]
+
+        return dict(google_analytics=google_analytics())
+
+
+    @app.route("/", methods=["POST", "GET"])
+    def index():
+        """
+        Default app index.
+        """
+        return "Please contact your System Administrator."
+
+
+    @app.route("/status", methods=["GET"])
+    def status():  # pragma: no cover
+        """
+        Runs smoke tests and reports status
+        """
+        try:
+            job_queue_length = len(q.jobs)
+        except ConnectionError:
+            job_queue_length = -1
+
+        status = {
+            "tool": "Quiz Extensions",
+            "checks": {
+                "index": False,
+                #"lticonfig": False,
+                "api_key": False,
+                "redis": False,
+                "db": False,
+                "worker": False,
+            },
+            "url": url_for("index", _external=True),
+            "api_url": config.API_URL,
+            "debug": app.debug,
+            #"config_url": url_for("lticonfig", _external=True),
+            "job_queue": job_queue_length,
+        }
+
+        # Check index
+        try:
+            response = requests.get(url_for("index", _external=True), verify=False)
+            status["checks"]["index"] = (
+                response.text == "Please contact your System Administrator."
+            )
+        except Exception:
+            logger.exception("Index check failed.")
+
+        """
+        # Check LTI Config
+        try:
+            response = requests.get(url_for("lticonfig", _external=True), verify=False)
+            status["checks"]["lticonfig"] = "application/json" in response.headers.get(
+                "Content-Type"
+            )
+        except Exception:
+            logger.exception("LTI Config check failed.")
+        """
+
+        # Check API Key
+        try:
+            response = requests.get(
+                "{}users/self".format(config.API_URL),
+                headers={"Authorization": "Bearer " + config.API_KEY},
+            )
+            status["checks"]["api_key"] = response.status_code == 200
+        except Exception:
+            logger.exception("API Key check failed.")
+
+        # Check redis
+        try:
+            response = conn.echo("test")
+            status["checks"]["redis"] = response == b"test"
+        except ConnectionError:
+            logger.exception("Redis connection failed.")
+
+        # Check DB connection
+        try:
+            db.session.execute(text("SELECT 1"))
+            status["checks"]["db"] = True
+        except Exception:
+            logger.exception("DB connection failed.")
+
+        # Check RQ Worker
+        status["checks"]["worker"] = (
+            call('ps aux | grep "rq worker" | grep "quizext" | grep -v grep', shell=True)
+            == 0
         )
-    except Exception:
-        logger.exception("LTI Config check failed.")
-    """
 
-    # Check API Key
-    try:
-        response = requests.get(
-            "{}users/self".format(config.API_URL),
-            headers={"Authorization": "Bearer " + config.API_KEY},
+        # Overall health check - if all checks are True
+        status["healthy"] = all(v is True for k, v in status["checks"].items())
+
+        return Response(json.dumps(status), mimetype="application/json")
+
+
+    @app.route("/quiz/<course_id>/", methods=["GET"])
+    @lti_required(role="staff")
+    def quiz(course_id=None):
+        """
+        Main landing page for the app.
+
+        Displays a page to the user that allows them to select students
+        to moderate quizzes for.
+        """
+        return render_template("userselect.html", course_id=course_id)
+
+
+    @app.route("/refresh/<course_id>/", methods=["POST"])
+    def refresh(course_id=None):
+        """
+        Creates a new `refresh_background` job.
+
+        :param course_id: The Canvas ID of the Course.
+        :type course_id: int
+        :rtype: flask.Response
+        :returns: A JSON-formatted response containing a url for the started job.
+        """
+        job = q.enqueue_call(func=refresh_background, args=(course_id,))
+        return Response(
+            json.dumps({"refresh_job_url": url_for("job_status", job_key=job.get_id())}),
+            mimetype="application/json",
+            status=202,
         )
-        status["checks"]["api_key"] = response.status_code == 200
-    except Exception:
-        logger.exception("API Key check failed.")
-
-    # Check redis
-    try:
-        response = conn.echo("test")
-        status["checks"]["redis"] = response == b"test"
-    except ConnectionError:
-        logger.exception("Redis connection failed.")
-
-    # Check DB connection
-    try:
-        db.session.execute(text("SELECT 1"))
-        status["checks"]["db"] = True
-    except Exception:
-        logger.exception("DB connection failed.")
-
-    # Check RQ Worker
-    status["checks"]["worker"] = (
-        call('ps aux | grep "rq worker" | grep "quizext" | grep -v grep', shell=True)
-        == 0
-    )
-
-    # Overall health check - if all checks are True
-    status["healthy"] = all(v is True for k, v in status["checks"].items())
-
-    return Response(json.dumps(status), mimetype="application/json")
 
 
-@app.route("/quiz/<course_id>/", methods=["GET"])
-@lti_required(role="staff")
-def quiz(course_id=None):
-    """
-    Main landing page for the app.
+    @app.route("/update/<course_id>/", methods=["POST"])
+    @lti_required(role="staff")
+    def update(course_id=None):
+        """
+        Creates a new `update_background` job.
 
-    Displays a page to the user that allows them to select students
-    to moderate quizzes for.
-    """
-    return render_template("userselect.html", course_id=course_id)
-
-
-@app.route("/refresh/<course_id>/", methods=["POST"])
-def refresh(course_id=None):
-    """
-    Creates a new `refresh_background` job.
-
-    :param course_id: The Canvas ID of the Course.
-    :type course_id: int
-    :rtype: flask.Response
-    :returns: A JSON-formatted response containing a url for the started job.
-    """
-    job = q.enqueue_call(func=refresh_background, args=(course_id,))
-    return Response(
-        json.dumps({"refresh_job_url": url_for("job_status", job_key=job.get_id())}),
-        mimetype="application/json",
-        status=202,
-    )
-
-
-@app.route("/update/<course_id>/", methods=["POST"])
-@lti_required(role="staff")
-def update(course_id=None):
-    """
-    Creates a new `update_background` job.
-
-    :param course_id: The Canvas ID of the Course.
-    :type coruse_id: int
-    :rtype: flask.Response
-    :returns: A JSON-formatted response containing urls for the started jobs.
-    """
-    refresh_job = q.enqueue_call(func=refresh_background, args=(course_id,))
-    update_job = q.enqueue_call(
-        func=update_background,
-        args=(course_id, request.get_json()),
-        depends_on=refresh_job,
-    )
-    return Response(
-        json.dumps(
-            {
-                "refresh_job_url": url_for("job_status", job_key=refresh_job.get_id()),
-                "update_job_url": url_for("job_status", job_key=update_job.get_id()),
-            }
-        ),
-        mimetype="application/json",
-        status=202,
-    )
-
-
-@app.route("/jobs/<job_key>/", methods=["GET"])
-def job_status(job_key):
-    try:
-        job = Job.fetch(job_key, connection=conn)
-    except NoSuchJobError:
+        :param course_id: The Canvas ID of the Course.
+        :type coruse_id: int
+        :rtype: flask.Response
+        :returns: A JSON-formatted response containing urls for the started jobs.
+        """
+        refresh_job = q.enqueue_call(func=refresh_background, args=(course_id,))
+        update_job = q.enqueue_call(
+            func=update_background,
+            args=(course_id, request.get_json()),
+            depends_on=refresh_job,
+        )
         return Response(
             json.dumps(
                 {
-                    "error": True,
-                    "status_msg": "{} is not a valid job key.".format(job_key),
+                    "refresh_job_url": url_for("job_status", job_key=refresh_job.get_id()),
+                    "update_job_url": url_for("job_status", job_key=update_job.get_id()),
                 }
             ),
             mimetype="application/json",
-            status=404,
+            status=202,
         )
 
-    if job.is_finished:
-        return Response(json.dumps(job.result), mimetype="application/json", status=200)
-    elif job.is_failed:
-        logger.error("Job {} failed.\n{}".format(job_key, job.exc_info))
-        return Response(
-            json.dumps(
-                {
-                    "error": True,
-                    "status_msg": "Job {} failed to complete.".format(job_key),
-                }
-            ),
-            mimetype="application/json",
-            status=500,
+
+    @app.route("/jobs/<job_key>/", methods=["GET"])
+    def job_status(job_key):
+        try:
+            job = Job.fetch(job_key, connection=conn)
+        except NoSuchJobError:
+            return Response(
+                json.dumps(
+                    {
+                        "error": True,
+                        "status_msg": "{} is not a valid job key.".format(job_key),
+                    }
+                ),
+                mimetype="application/json",
+                status=404,
+            )
+
+        if job.is_finished:
+            return Response(json.dumps(job.result), mimetype="application/json", status=200)
+        elif job.is_failed:
+            logger.error("Job {} failed.\n{}".format(job_key, job.exc_info))
+            return Response(
+                json.dumps(
+                    {
+                        "error": True,
+                        "status_msg": "Job {} failed to complete.".format(job_key),
+                    }
+                ),
+                mimetype="application/json",
+                status=500,
+            )
+        else:
+            return Response(json.dumps(job.meta), mimetype="application/json", status=202)
+
+
+    @app.route("/missing_and_stale_quizzes/<course_id>/", methods=["GET"])
+    def missing_and_stale_quizzes_check(course_id):
+        """
+        Check if there are missing quizzes.
+
+        :param course_id: The Canvas ID of the Course.
+        :type course_id: int
+        :rtype: str
+        :returns: A JSON-formatted string representation of a boolean.
+            "true" if there are missing quizzes, "false" if there are not.
+        """
+        course = Course.query.filter_by(canvas_id=course_id).first()
+        if course is None:
+            # No record of this course. No need to update yet.
+            return "false"
+
+        num_extensions = Extension.query.filter_by(course_id=course.id).count()
+        if num_extensions == 0:
+            # There are no extensions for this course yet. No need to update.
+            return "false"
+
+        missing = len(missing_and_stale_quizzes(canvas, course_id, True)) > 0
+        return json.dumps(missing)
+
+
+    @app.route("/filter/<course_id>/", methods=["GET"])
+    @lti_required(role="staff")
+    def filter(course_id=None):
+        """
+        Display a filtered and paginated list of students in the course.
+
+        :param course_id: The Canvas ID of the course to search in
+        :type: int
+        :rtype: str
+        :returns: A list of students in the course using the template user_list.html.
+        """
+
+        query = request.args.get("query", "").lower()
+
+        course = canvas.get_course(course_id)
+        user_list = course.get_users(
+            search_term=query,
+            enrollment_type=["student"],
+            enrollment_state=["active", "invited"],
         )
-    else:
-        return Response(json.dumps(job.meta), mimetype="application/json", status=202)
+
+        return render_template("user_list.html", users=user_list)
 
 
 def update_background(course_id, extension_dict):
@@ -515,7 +565,7 @@ def update_background(course_id, extension_dict):
 
         try:
             course_obj = canvas.get_course(course_id)
-        except requests.exceptions.HTTPError:
+        except ResourceDoesNotExist:
             update_job(job, 0, "Course not found.", "failed", error=True)
             logger.exception("Unable to find course #{}".format(course_id))
             return job.meta
@@ -543,7 +593,7 @@ def update_background(course_id, extension_dict):
 
                 sis_id = canvas_user.__getattribute__("sis_user_id")
 
-            except requests.exceptions.HTTPError:
+            except ResourceDoesNotExist:
                 # Unable to find user. Log and skip them.
                 logger.warning(
                     "Unable to find user #{} in course #{}".format(user_id, course_id)
@@ -603,8 +653,8 @@ def update_background(course_id, extension_dict):
             is_new = index >= num_quizzes
 
             if is_new:
-                settings = quiz.__getattribute__("quiz_settings").__dict__
-                if settings.__getattribute__("has_time_limit"):
+                settings = quiz.__getattribute__("quiz_settings")
+                if settings["has_time_limit"]:
                     # Divide by 60 because Canvas stores new quiz timers in seconds
                     quiz.__setattr__(
                         "time_limit", settings["session_time_limit_in_seconds"] / 60
@@ -704,7 +754,7 @@ def refresh_background(course_id):
             course_name = course_obj.name
             course.course_name = course_name
             db.session.commit()
-        except requests.exceptions.HTTPError:
+        except ResourceDoesNotExist:
             update_job(job, 0, "Course not found.", "failed", error=True)
             logger.exception("Unable to find course #{}".format(course_id))
 
@@ -750,9 +800,9 @@ def refresh_background(course_id):
                 # student that previously recieved an extension changes roles.
                 enrolls = list(canvas_user.get_enrollments())
                 type_list = [
-                    e["type"]
+                    e.__getattribute__("type")
                     for e in enrolls
-                    if e["enrollment_state"] in ("active", "invited")
+                    if e.__getattribute__("enrollment_state") in ("active", "invited")
                 ]
                 if not any(t == "StudentEnrollment" for t in type_list):
                     logger.info(
@@ -772,7 +822,7 @@ def refresh_background(course_id):
                     inactive_list.append(extension.user.sortable_name)
                     continue
 
-            except requests.exceptions.HTTPError:
+            except ResourceDoesNotExist:
                 log_str = "User #{} not in course #{}. Deactivating extension #{}."
                 logger.info(log_str.format(user_canvas_id, course_id, extension.id))
                 extension.active = False
@@ -784,10 +834,9 @@ def refresh_background(course_id):
             percent_user_map[extension.percent].append(user_canvas_id)
 
         if len(percent_user_map) < 1:
-            msg_str = "No active extensions were found.<br>"
-
+            msg_str = f"No active extensions were found.<br>"
             if len(inactive_list) > 0:
-                msg_str += " Extensions for the following students are inactive:<br>{}"
+                msg_str += "Extensions for the following students are inactive:<br>{}"
                 msg_str = msg_str.format("<br>".join(inactive_list))
 
             update_job(job, 100, msg_str, "complete", error=False)
@@ -832,52 +881,5 @@ def refresh_background(course_id):
         msg = "{} quizzes have been updated.".format(len(quizzes))
         update_job(job, 100, msg, "complete", error=False)
         return job.meta
-
-
-@app.route("/missing_and_stale_quizzes/<course_id>/", methods=["GET"])
-def missing_and_stale_quizzes_check(course_id):
-    """
-    Check if there are missing quizzes.
-
-    :param course_id: The Canvas ID of the Course.
-    :type course_id: int
-    :rtype: str
-    :returns: A JSON-formatted string representation of a boolean.
-        "true" if there are missing quizzes, "false" if there are not.
-    """
-    course = Course.query.filter_by(canvas_id=course_id).first()
-    if course is None:
-        # No record of this course. No need to update yet.
-        return "false"
-
-    num_extensions = Extension.query.filter_by(course_id=course.id).count()
-    if num_extensions == 0:
-        # There are no extensions for this course yet. No need to update.
-        return "false"
-
-    missing = len(missing_and_stale_quizzes(canvas, course_id, True)) > 0
-    return json.dumps(missing)
-
-
-@app.route("/filter/<course_id>/", methods=["GET"])
-@lti_required(role="staff")
-def filter(course_id=None):
-    """
-    Display a filtered and paginated list of students in the course.
-
-    :param course_id: The Canvas ID of the course to search in
-    :type: int
-    :rtype: str
-    :returns: A list of students in the course using the template user_list.html.
-    """
-
-    query = request.args.get("query", "").lower()
-
-    course = canvas.get_course(course_id)
-    user_list = course.get_users(
-        search_term=query,
-        enrollment_type=["student"],
-        enrollment_state=["active", "invited"],
-    )
-
-    return render_template("user_list.html", users=user_list)
+    
+init_views(app)
