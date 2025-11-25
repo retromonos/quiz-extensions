@@ -1,31 +1,21 @@
 import logging
-import sys
-from unittest.mock import patch
-from urllib.parse import urlencode
 
 import fakeredis
-from flask_caching import Cache
-from flask_migrate import Migrate
 import flask_testing
-import oauthlib.oauth1
-import requests
 import requests_mock
-from flask import Flask, session, url_for
+from canvasapi import Canvas
+from flask import Flask, session
+from flask_caching import Cache
 from rq import Queue, SimpleWorker
 
-from canvasapi import Canvas
-from canvasapi.quiz import Quiz as CQuiz
-from models import db
-import copy
-import config
 import views
-from models import Course, Extension, Quiz, User
+from models import Course, Extension, Quiz, User, db
 
-# Tests with the suffix "_new" are for testing New Quiz functionality specifically, 
+# Tests with the suffix "_new" are for testing New Quiz functionality specifically,
 # and are identical to their classic quiz counterparts otherwise.
 
 # class ViewTests: Tests functionality in our Flask views (navigating the LTI page)
-# class UtilTests: Tests functionality for our backend utility functions (extend, get_or_create, etc.)
+# class UtilTests: Tests functionality for our backend utility functions
 
 # View Route Testing
 
@@ -35,6 +25,7 @@ from models import Course, Extension, Quiz, User
 # [UPDATE BACKGROUND TESTS]
 # [REFRESH BACKGROUND TESTS]
 # [MISSING AND STALE TESTS]
+
 
 @requests_mock.Mocker()
 class ViewTests(flask_testing.TestCase):
@@ -55,12 +46,12 @@ class ViewTests(flask_testing.TestCase):
         views.init_views(app)
 
         return app
-    
+
     def setUp(self):
-        #with self.app.test_request_context():
+        # with self.app.test_request_context():
         db.drop_all()
         db.create_all()
-        
+
         self.queue = Queue(is_async=False, connection=fakeredis.FakeStrictRedis())
         self.worker = SimpleWorker([self.queue], connection=self.queue.connection)
 
@@ -89,7 +80,7 @@ class ViewTests(flask_testing.TestCase):
         @views.lti_required(role="staff")
         def test_func():
             pass
-        
+
         # Should break at testing launch_id
         response = test_func()
         self.assertIn("You must use this tool in an LTI context.", response[0])
@@ -124,12 +115,22 @@ class ViewTests(flask_testing.TestCase):
     def test_filter_no_students_found(self, m):
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Example Course"},
         )
-        m.register_uri("GET", "{}api/v1/courses/1/search_users".format(self.app.config["TESTING_API_URL"]), json=[])
+        m.register_uri(
+            "GET",
+            "{}api/v1/courses/1/search_users".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[],
+        )
 
         course_id = 1
         response = self.client.get("/filter/{}/".format(course_id))
@@ -140,15 +141,26 @@ class ViewTests(flask_testing.TestCase):
     def test_filter(self, m):
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
-            
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
+
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Example Course"},
         )
         m.register_uri(
             "GET",
-            "{}api/v1/courses/1/search_users".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 1, "name": "John Smith"}, {"id": 2, "name": "Jane Doe"},{"id": 3, "name": "Jane Smyth"}, {"id": 4, "name": "Jon Doe"}],
+            "{}api/v1/courses/1/search_users".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {"id": 1, "name": "John Smith"},
+                {"id": 2, "name": "Jane Doe"},
+                {"id": 3, "name": "Jane Smyth"},
+                {"id": 4, "name": "Jon Doe"},
+            ],
             headers={
                 "Link": f'<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="current",<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="first",<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="last",'
             },
@@ -163,7 +175,9 @@ class ViewTests(flask_testing.TestCase):
     def test_quiz(self, m):
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
@@ -180,7 +194,9 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
@@ -202,11 +218,17 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
-        m.register_uri("GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), status_code=404)
+        m.register_uri(
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            status_code=404,
+        )
 
         job = self.queue.enqueue_call(
             func=update_background,
@@ -229,12 +251,16 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         job = self.queue.enqueue_call(
@@ -257,12 +283,16 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
         m.register_uri(
             "GET",
@@ -301,43 +331,49 @@ class ViewTests(flask_testing.TestCase):
         m.register_uri(
             "GET",
             "{}api/v1/users/11/enrollments".format(self.app.config["TESTING_API_URL"]),
-            json=[{
-                "id": 33,
-                "user_id": 11,
-                "type": "StudentEnrollment",
-                "enrollment_state": "active",
-            }],
+            json=[
+                {
+                    "id": 33,
+                    "user_id": 11,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "active",
+                }
+            ],
         )
         m.register_uri(
             "GET",
             "{}api/v1/users/12/enrollments".format(self.app.config["TESTING_API_URL"]),
-            json=[{
-                "id": 34,
-                "user_id": 12,
-                "type": "StudentEnrollment",
-                "enrollment_state": "active",
-            }],
+            json=[
+                {
+                    "id": 34,
+                    "user_id": 12,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "active",
+                }
+            ],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/4/extensions".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
+            "POST",
+            "{}api/v1/courses/1/quizzes/4/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/5/extensions".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
+            "POST",
+            "{}api/v1/courses/1/quizzes/5/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
         course = Course(course_id, course_name="Example Course")
         views.db.session.add(course)
@@ -380,14 +416,22 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
-        m.register_uri("GET", "{}api/v1/courses/1/quizzes".format(self.app.config["TESTING_API_URL"]), json=[])
+        m.register_uri(
+            "GET",
+            "{}api/v1/courses/1/quizzes".format(self.app.config["TESTING_API_URL"]),
+            json=[],
+        )
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/11".format(self.app.config["TESTING_API_URL"]),
@@ -395,7 +439,7 @@ class ViewTests(flask_testing.TestCase):
                 "id": 11,
                 "name": "Joe Smyth",
                 "sortable_name": "Joe Smyth",
-                "sis_user_id": "JSmyth11"
+                "sis_user_id": "JSmyth11",
             },
         )
         m.register_uri(
@@ -405,11 +449,15 @@ class ViewTests(flask_testing.TestCase):
                 "id": 12,
                 "name": "Jack Smith",
                 "sortable_name": "Jack Smith",
-                "sis_user_id": "JSmith12"
+                "sis_user_id": "JSmith12",
             },
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
         course = Course(course_id, course_name="Example Course")
         views.db.session.add(course)
@@ -445,18 +493,22 @@ class ViewTests(flask_testing.TestCase):
         self.assertEqual(
             job_result["status_msg"], "Sorry, there are no quizzes for this course."
         )
-    
+
     def test_update_background_extension_error(self, m):
         from views import update_background
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
         m.register_uri(
             "GET",
@@ -471,39 +523,51 @@ class ViewTests(flask_testing.TestCase):
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/11".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 11, "name": "Joe Smyth", "sortable_name": "Joe Smyth", "sis_user_id": "JSmyth11"},
+            json={
+                "id": 11,
+                "name": "Joe Smyth",
+                "sortable_name": "Joe Smyth",
+                "sis_user_id": "JSmyth11",
+            },
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
+            "GET",
+            "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/13".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 13, "name": "Jack Smith", "sortable_name": "Jack Smith", "sis_user_id": "JSmith13"},
+            json={
+                "id": 13,
+                "name": "Jack Smith",
+                "sortable_name": "Jack Smith",
+                "sis_user_id": "JSmith13",
+            },
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/4/extensions".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
-        m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/5/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/4/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "POST",
+            "{}api/v1/courses/1/quizzes/5/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
+        )
+        m.register_uri(
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
         course = Course(course_id, course_name="Example Course")
         views.db.session.add(course)
@@ -546,12 +610,16 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
         m.register_uri(
             "GET",
@@ -566,36 +634,51 @@ class ViewTests(flask_testing.TestCase):
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/11".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 11, "name": "Joe Smyth", "sortable_name": "Joe Smyth", "sis_user_id": "JSmyth11"},
+            json={
+                "id": 11,
+                "name": "Joe Smyth",
+                "sortable_name": "Joe Smyth",
+                "sis_user_id": "JSmyth11",
+            },
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
+            "GET",
+            "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/13".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 13, "name": "Jack Smith", "sortable_name": "Jack Smith", "sis_user_id": "JSmith13"},
-        )
-        m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/4/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
             json={
-                "quiz_extensions": []
-            }
+                "id": 13,
+                "name": "Jack Smith",
+                "sortable_name": "Jack Smith",
+                "sis_user_id": "JSmith13",
+            },
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/5/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/4/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "POST",
+            "{}api/v1/courses/1/quizzes/5/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
+        )
+        m.register_uri(
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -643,12 +726,16 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
         m.register_uri(
             "GET",
@@ -662,56 +749,84 @@ class ViewTests(flask_testing.TestCase):
         )
 
         m.register_uri(
-            "POST", "{}api/quiz/v1/courses/1/quizzes/8/accommodations".format(self.app.config["TESTING_API_URL"]), status_code=200,
+            "POST",
+            "{}api/quiz/v1/courses/1/quizzes/8/accommodations".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
             json={
-            "message": "Accommodations processed",
-            "successful": [{"user_id":11},{"user_id":12},{"user_id":13}],
-            "failed": []
-            }
+                "message": "Accommodations processed",
+                "successful": [{"user_id": 11}, {"user_id": 12}, {"user_id": 13}],
+                "failed": [],
+            },
         )
 
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/11".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 11, "name": "Joe Smyth", "sortable_name": "Joe Smyth", "sis_user_id": "JSmyth11"},
+            json={
+                "id": 11,
+                "name": "Joe Smyth",
+                "sortable_name": "Joe Smyth",
+                "sis_user_id": "JSmyth11",
+            },
         )
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
+            "GET",
+            "{}api/v1/courses/1/users/12".format(self.app.config["TESTING_API_URL"]),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/users/13".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 13, "name": "Jack Smith", "sortable_name": "Jack Smith", "sis_user_id": "JSmith13"},
-        )
-        m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/4/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
             json={
-                "quiz_extensions": []
-            }
+                "id": 13,
+                "name": "Jack Smith",
+                "sortable_name": "Jack Smith",
+                "sis_user_id": "JSmith13",
+            },
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/5/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/4/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 8, "title": "Quiz 8", "quiz_settings": {
-                "session_time_limit_in_seconds": 600,
-                "has_time_limit": True
-            }},
-            {"id": 9, "title": "Quiz 9", "quiz_settings": {
-                "session_time_limit_in_seconds": 0,
-                "has_time_limit": False
-            }}]
+            "POST",
+            "{}api/v1/courses/1/quizzes/5/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
+        )
+        m.register_uri(
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 8,
+                    "title": "Quiz 8",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 600,
+                        "has_time_limit": True,
+                    },
+                },
+                {
+                    "id": 9,
+                    "title": "Quiz 9",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 0,
+                        "has_time_limit": False,
+                    },
+                },
+            ],
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -762,11 +877,17 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
-        m.register_uri("GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), status_code=404)
+        m.register_uri(
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            status_code=404,
+        )
 
         job = self.queue.enqueue_call(func=refresh_background, args=(course_id,))
         self.worker.work(burst=True)
@@ -786,18 +907,28 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/quizzes".format(self.app.config["TESTING_API_URL"]), json=[{"id": 3, "title": "Quiz 3", "time_limit": None}]
+            "GET",
+            "{}api/v1/courses/1/quizzes".format(self.app.config["TESTING_API_URL"]),
+            json=[{"id": 3, "title": "Quiz 3", "time_limit": None}],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         quiz = Quiz(3, course_id)
@@ -825,7 +956,9 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
@@ -840,14 +973,12 @@ class ViewTests(flask_testing.TestCase):
             json=[{"id": 1, "title": "Quiz 1", "time_limit": 10}],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/1/extensions".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specificed resource does not exist."
-                    }
-                ]
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/1/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specificed resource does not exist."}]},
         )
         m.register_uri(
             "GET",
@@ -862,16 +993,24 @@ class ViewTests(flask_testing.TestCase):
         )
         m.register_uri(
             "GET",
-            "{}api/v1/users/12345/enrollments".format(self.app.config["TESTING_API_URL"]),
-            json=[{
-                "id": 222,
-                "user_id": 12345,
-                "type": "StudentEnrollment",
-                "enrollment_state": "active",
-            }],
+            "{}api/v1/users/12345/enrollments".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 222,
+                    "user_id": 12345,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "active",
+                }
+            ],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -910,7 +1049,9 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
         user_id = 9001
@@ -922,36 +1063,50 @@ class ViewTests(flask_testing.TestCase):
         )
         m.register_uri(
             "GET",
-            "{}api/v1/courses/{}/quizzes".format(self.app.config["TESTING_API_URL"], course_id),
+            "{}api/v1/courses/{}/quizzes".format(
+                self.app.config["TESTING_API_URL"], course_id
+            ),
             json=[
                 {"id": 1, "title": "Quiz 1", "time_limit": 10},
                 {"id": 2, "title": "Quiz 2", "time_limit": 30},
             ],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/1/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/1/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/2/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/2/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
             "GET",
-            "{}api/v1/users/{}/enrollments".format(self.app.config["TESTING_API_URL"], user_id),
-            status_code=404
-        )
-        m.register_uri(
-            "GET",
-            "{}api/v1/courses/{}/users/{}".format(self.app.config["TESTING_API_URL"], course_id, user_id),
+            "{}api/v1/users/{}/enrollments".format(
+                self.app.config["TESTING_API_URL"], user_id
+            ),
             status_code=404,
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/v1/courses/{}/users/{}".format(
+                self.app.config["TESTING_API_URL"], course_id, user_id
+            ),
+            status_code=404,
+        )
+        m.register_uri(
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -968,19 +1123,23 @@ class ViewTests(flask_testing.TestCase):
 
         # Check that the extension is active first
         self.assertTrue(ext.active)
-        ext_id = ext.id
 
         job = self.queue.enqueue_call(func=refresh_background, args=(course_id,))
         self.worker.work(burst=True)
         self.assertTrue(job.is_finished)
-        self.assertEqual(f"{job.return_value()["status_msg"]}", "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User")
+        self.assertEqual(
+            f"{job.return_value()["status_msg"]}",
+            "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User",
+        )
 
     def test_refresh_background_inactive_user(self, m):
         from views import refresh_background
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
         user_id = 9001
@@ -992,37 +1151,49 @@ class ViewTests(flask_testing.TestCase):
         )
         m.register_uri(
             "GET",
-            "{}api/v1/courses/{}/quizzes".format(self.app.config["TESTING_API_URL"], course_id),
+            "{}api/v1/courses/{}/quizzes".format(
+                self.app.config["TESTING_API_URL"], course_id
+            ),
             json=[
                 {"id": 1, "title": "Quiz 1", "time_limit": 10},
                 {"id": 2, "title": "Quiz 2", "time_limit": 30},
             ],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/1/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/1/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/2/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
-        )
-        m.register_uri(
-            "GET",
-            "{}api/v1/users/{}/enrollments".format(self.app.config["TESTING_API_URL"], user_id),
-            json=[{
-                "id": 222,
-                "user_id": user_id,
-                "type": "StudentEnrollment",
-                "enrollment_state": "inactive",
-            }],
+            "POST",
+            "{}api/v1/courses/1/quizzes/2/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
             "GET",
-            "{}api/v1/courses/{}/users/{}".format(self.app.config["TESTING_API_URL"], course_id, user_id),
+            "{}api/v1/users/{}/enrollments".format(
+                self.app.config["TESTING_API_URL"], user_id
+            ),
+            json=[
+                {
+                    "id": 222,
+                    "user_id": user_id,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "inactive",
+                }
+            ],
+        )
+        m.register_uri(
+            "GET",
+            "{}api/v1/courses/{}/users/{}".format(
+                self.app.config["TESTING_API_URL"], course_id, user_id
+            ),
             status_code=200,
             json={
                 "id": user_id,
@@ -1033,7 +1204,11 @@ class ViewTests(flask_testing.TestCase):
             },
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -1050,19 +1225,23 @@ class ViewTests(flask_testing.TestCase):
 
         # Check that the extension is active first
         self.assertTrue(ext.active)
-        ext_id = ext.id
 
         job = self.queue.enqueue_call(func=refresh_background, args=(course_id,))
         self.worker.work(burst=True)
         self.assertTrue(job.is_finished)
-        self.assertEqual(f"{job.return_value()["status_msg"]}", "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User")
+        self.assertEqual(
+            f"{job.return_value()["status_msg"]}",
+            "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User",
+        )
 
     def test_refresh_background_update_success(self, m):
         from views import refresh_background
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
@@ -1080,16 +1259,20 @@ class ViewTests(flask_testing.TestCase):
             ],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/1/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/1/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/2/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/2/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
 
         m.register_uri(
@@ -1105,17 +1288,25 @@ class ViewTests(flask_testing.TestCase):
         )
         m.register_uri(
             "GET",
-            "{}api/v1/users/12345/enrollments".format(self.app.config["TESTING_API_URL"]),
-            json=[{
-                "id": 222,
-                "user_id": 12345,
-                "type": "StudentEnrollment",
-                "enrollment_state": "active",
-            }],
+            "{}api/v1/users/12345/enrollments".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 222,
+                    "user_id": 12345,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "active",
+                }
+            ],
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -1154,7 +1345,9 @@ class ViewTests(flask_testing.TestCase):
 
         with self.client.session_transaction() as sess:
             sess["launch_id"] = 12345
-            sess["roles"] = ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"]
+            sess["roles"] = [
+                "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+            ]
 
         course_id = 1
 
@@ -1172,25 +1365,33 @@ class ViewTests(flask_testing.TestCase):
             ],
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/1/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/1/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/2/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/2/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
 
         m.register_uri(
-            "POST", "{}api/quiz/v1/courses/1/quizzes/3/accommodations".format(self.app.config["TESTING_API_URL"]), status_code=200,
+            "POST",
+            "{}api/quiz/v1/courses/1/quizzes/3/accommodations".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
             json={
-            "message": "Accommodations processed",
-            "successful": [{"user_id":12345}],
-            "failed": []
-            }
+                "message": "Accommodations processed",
+                "successful": [{"user_id": 12345}],
+                "failed": [],
+            },
         )
 
         m.register_uri(
@@ -1206,21 +1407,34 @@ class ViewTests(flask_testing.TestCase):
         )
         m.register_uri(
             "GET",
-            "{}api/v1/users/12345/enrollments".format(self.app.config["TESTING_API_URL"]),
-            json=[{
-                "id": 222,
-                "user_id": 12345,
-                "type": "StudentEnrollment",
-                "enrollment_state": "active",
-            }],
+            "{}api/v1/users/12345/enrollments".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 222,
+                    "user_id": 12345,
+                    "type": "StudentEnrollment",
+                    "enrollment_state": "active",
+                }
+            ],
         )
-        
+
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 3, "title": "Quiz 3", "quiz_settings": {
-                "session_time_limit_in_seconds": 600,
-                "has_time_limit": True
-            }}]
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 3,
+                    "title": "Quiz 3",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 600,
+                        "has_time_limit": True,
+                    },
+                }
+            ],
         )
 
         course = Course(course_id, course_name="Example Course")
@@ -1277,13 +1491,23 @@ class ViewTests(flask_testing.TestCase):
 
     def test_missing_and_stale_quizzes_check_true(self, m):
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Course 1"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Course 1"},
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), json=[{"id": 1, "title": "Quiz 1"}]
+            "GET",
+            "{}api/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[{"id": 1, "title": "Quiz 1"}],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course_id = 1
@@ -1303,17 +1527,32 @@ class ViewTests(flask_testing.TestCase):
 
     def test_missing_and_stale_quizzes_check_true_new(self, m):
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Course 1"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Course 1"},
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), json=[]
+            "GET",
+            "{}api/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 1, "title": "Quiz 1", "quiz_settings": {
-                "session_time_limit_in_seconds": 600,
-                "has_time_limit": True
-            }}]
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 1,
+                    "title": "Quiz 1",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 600,
+                        "has_time_limit": True,
+                    },
+                }
+            ],
         )
 
         course_id = 1
@@ -1333,13 +1572,23 @@ class ViewTests(flask_testing.TestCase):
 
     def test_missing_and_stale_quizzes_check_false(self, m):
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Course 1"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Course 1"},
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), json=[{"id": 1, "title": "Quiz 1", "time_limit": 0}]
+            "GET",
+            "{}api/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[{"id": 1, "title": "Quiz 1", "time_limit": 0}],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         course_id = 1
@@ -1364,17 +1613,32 @@ class ViewTests(flask_testing.TestCase):
 
     def test_missing_and_stale_quizzes_check_false_new(self, m):
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "title": "Course 1"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "title": "Course 1"},
         )
         m.register_uri(
-            "GET", "{}api/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), json=[]
+            "GET",
+            "{}api/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[],
         )
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 1, "title": "Quiz 1", "quiz_settings": {
-                "session_time_limit_in_seconds": 0,
-                "has_time_limit": False
-            }}]
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 1,
+                    "title": "Quiz 1",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 0,
+                        "has_time_limit": False,
+                    },
+                }
+            ],
         )
 
         course_id = 1
@@ -1397,12 +1661,14 @@ class ViewTests(flask_testing.TestCase):
         self.assert_200(response)
         self.assertEqual(response.data, b"false")
 
+
 # Utility Function Testing
-        
+
 # Test Category Headers (search these)
 # [EXTEND QUIZ TESTS]
 # [GET OR CREATE TESTS]
 # [MISSING AND STALE TESTS]
+
 
 @requests_mock.Mocker()
 class UtilTests(flask_testing.TestCase):
@@ -1424,13 +1690,13 @@ class UtilTests(flask_testing.TestCase):
         views.init_views(app)
 
         return app
-    
+
     def setUp(self):
         logging.disable(logging.CRITICAL)
-        #with self.app.test_request_context():
+        # with self.app.test_request_context():
         db.drop_all()
         db.create_all()
-        
+
         self.queue = Queue(is_async=False, connection=fakeredis.FakeStrictRedis())
         self.worker = SimpleWorker([self.queue], connection=self.queue.connection)
 
@@ -1445,19 +1711,27 @@ class UtilTests(flask_testing.TestCase):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/2/extensions".format(self.app.config["TESTING_API_URL"]), status_code=200,
-            json={
-                "quiz_extensions": []
-            }
+            "POST",
+            "{}api/v1/courses/1/quizzes/2/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
+            json={"quiz_extensions": []},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
-        )    
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
+        )
 
         m.register_uri(
             "GET",
@@ -1482,29 +1756,34 @@ class UtilTests(flask_testing.TestCase):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
-            "POST", "{}api/v1/courses/1/quizzes/99/extensions".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            })
-        
+            "POST",
+            "{}api/v1/courses/1/quizzes/99/extensions".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
+        )
+
         m.register_uri(
             "GET",
             "{}api/v1/courses/1/quizzes/99".format(self.app.config["TESTING_API_URL"]),
             json={"id": 99, "course_id": 1, "title": "A Quiz", "time_limit": 10},
         )
-        
+
         response = extend_quiz(
             quiz=views.canvas.get_course(1).get_quiz(99),
             is_new=False,
@@ -1523,11 +1802,17 @@ class UtilTests(flask_testing.TestCase):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
@@ -1554,25 +1839,37 @@ class UtilTests(flask_testing.TestCase):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "POST", "{}api/quiz/v1/courses/1/quizzes/2/accommodations".format(self.app.config["TESTING_API_URL"]), status_code=200,
+            "POST",
+            "{}api/quiz/v1/courses/1/quizzes/2/accommodations".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=200,
             json={
-            "message": "Accommodations processed",
-            "successful": [{"user_id":1},{"user_id":2},{"user_id":3}],
-            "failed": []
-            }
+                "message": "Accommodations processed",
+                "successful": [{"user_id": 1}, {"user_id": 2}, {"user_id": 3}],
+                "failed": [],
+            },
         )
 
         m.register_uri(
             "GET",
-            "{}api/quiz/v1/courses/1/quizzes/2".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 2, "title": "A NEW Quiz", "quiz_settings": {
-                "session_time_limit_in_seconds": 600,
-                "has_time_limit": True
-            }},
+            "{}api/quiz/v1/courses/1/quizzes/2".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json={
+                "id": 2,
+                "title": "A NEW Quiz",
+                "quiz_settings": {
+                    "session_time_limit_in_seconds": 600,
+                    "has_time_limit": True,
+                },
+            },
         )
 
         # This code is in update_background, simulating its New Quiz preprocessing
@@ -1604,27 +1901,33 @@ class UtilTests(flask_testing.TestCase):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "POST", "{}api/quiz/v1/courses/1/quizzes/2/accommodations".format(self.app.config["TESTING_API_URL"]), status_code=404,
-            json={
-                "errors": [
-                    {
-                        "message": "The specified resource does not exist."
-                    }
-                ]
-            }
+            "POST",
+            "{}api/quiz/v1/courses/1/quizzes/2/accommodations".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=404,
+            json={"errors": [{"message": "The specified resource does not exist."}]},
         )
 
         m.register_uri(
             "GET",
-            "{}api/quiz/v1/courses/1/quizzes/2".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 2, "title": "A NEW Quiz", "quiz_settings": {
-                "session_time_limit_in_seconds": 600,
-                "has_time_limit": True
-            }},
+            "{}api/quiz/v1/courses/1/quizzes/2".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json={
+                "id": 2,
+                "title": "A NEW Quiz",
+                "quiz_settings": {
+                    "session_time_limit_in_seconds": 600,
+                    "has_time_limit": True,
+                },
+            },
         )
 
         # This code is in update_background, simulating its New Quiz preprocessing
@@ -1648,23 +1951,32 @@ class UtilTests(flask_testing.TestCase):
         self.assertIsInstance(response, dict)
         self.assertFalse(response["success"])
         self.assertEqual(
-            response["message"], "Error creating extension for New Quiz #2. Canvas status code: Not Found"
+            response["message"],
+            "Error creating extension for New Quiz #2. Canvas status code: Not Found",
         )
 
     def test_extend_quiz_new_no_time_limit(self, m):
         from utils import extend_quiz
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
             "GET",
-            "{}api/quiz/v1/courses/1/quizzes/2".format(self.app.config["TESTING_API_URL"]),
-            json={"id": 2, "title": "A NEW Quiz", "quiz_settings": {
-                "session_time_limit_in_seconds": None,
-                "has_time_limit": False
-            }},
+            "{}api/quiz/v1/courses/1/quizzes/2".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json={
+                "id": 2,
+                "title": "A NEW Quiz",
+                "quiz_settings": {
+                    "session_time_limit_in_seconds": None,
+                    "has_time_limit": False,
+                },
+            },
         )
 
         # This code is in update_background, simulating its New Quiz preprocessing
@@ -1688,7 +2000,8 @@ class UtilTests(flask_testing.TestCase):
         self.assertIsInstance(response, dict)
         self.assertTrue(response["success"])
         self.assertEqual(
-            response["message"], "New Quiz #2 has no time limit, so there is no time to add."
+            response["message"],
+            "New Quiz #2 has no time limit, so there is no time to add.",
         )
 
     # [GET OR CREATE TESTS]
@@ -1697,7 +2010,11 @@ class UtilTests(flask_testing.TestCase):
         from utils import get_or_create
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         quiz_id = 5
@@ -1715,7 +2032,11 @@ class UtilTests(flask_testing.TestCase):
         from utils import get_or_create
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         quiz_id = 5
@@ -1741,11 +2062,17 @@ class UtilTests(flask_testing.TestCase):
         from utils import missing_and_stale_quizzes
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
@@ -1772,29 +2099,48 @@ class UtilTests(flask_testing.TestCase):
         from utils import missing_and_stale_quizzes
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
             "GET",
             f"{self.app.config["TESTING_API_URL"]}api/v1/courses/1/quizzes",
-            json=[]
+            json=[],
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]),
-            json=[{"id": 1, "title": "Quiz 1", "quiz_settings": {
-                "session_time_limit_in_seconds": 0,
-                "has_time_limit": False
-            }},
-            {"id": 2, "title": "Quiz 2", "quiz_settings": {
-                "session_time_limit_in_seconds": 0,
-                "has_time_limit": False
-            }},
-            {"id": 3, "title": "Quiz 3", "quiz_settings": {
-                "session_time_limit_in_seconds": 0,
-                "has_time_limit": False
-            }}]
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            json=[
+                {
+                    "id": 1,
+                    "title": "Quiz 1",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 0,
+                        "has_time_limit": False,
+                    },
+                },
+                {
+                    "id": 2,
+                    "title": "Quiz 2",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 0,
+                        "has_time_limit": False,
+                    },
+                },
+                {
+                    "id": 3,
+                    "title": "Quiz 3",
+                    "quiz_settings": {
+                        "session_time_limit_in_seconds": 0,
+                        "has_time_limit": False,
+                    },
+                },
+            ],
         )
 
         quiz_obj = Quiz(course_id=1, canvas_id=2, title="Quiz 2", time_limit=0)
@@ -1809,17 +2155,25 @@ class UtilTests(flask_testing.TestCase):
 
     def test_missing_and_stale_quizzes_no_missing(self, m):
         from utils import missing_and_stale_quizzes
-        
+
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", f"{self.app.config["TESTING_API_URL"]}api/v1/courses/1/quizzes", json=[{"id": 1, "title": "Quiz 1", "time_limit": None}]
+            "GET",
+            f"{self.app.config["TESTING_API_URL"]}api/v1/courses/1/quizzes",
+            json=[{"id": 1, "title": "Quiz 1", "time_limit": None}],
         )
 
         quiz_obj = Quiz(course_id=1, canvas_id=1, title="Quiz 1")
@@ -1834,11 +2188,17 @@ class UtilTests(flask_testing.TestCase):
         from utils import missing_and_stale_quizzes
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
@@ -1867,11 +2227,17 @@ class UtilTests(flask_testing.TestCase):
         from utils import missing_and_stale_quizzes
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(
@@ -1897,11 +2263,17 @@ class UtilTests(flask_testing.TestCase):
         from utils import missing_and_stale_quizzes
 
         m.register_uri(
-            "GET", "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]), json={"id": 1, "name": "Example Course"}
+            "GET",
+            "{}api/v1/courses/1".format(self.app.config["TESTING_API_URL"]),
+            json={"id": 1, "name": "Example Course"},
         )
 
         m.register_uri(
-            "GET", "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(self.app.config["TESTING_API_URL"]), status_code=500
+            "GET",
+            "{}api/quiz/v1/courses/1/quizzes?per_page=100".format(
+                self.app.config["TESTING_API_URL"]
+            ),
+            status_code=500,
         )
 
         m.register_uri(

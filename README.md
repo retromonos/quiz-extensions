@@ -228,7 +228,7 @@ Linting errors will need to be fixed manually.
 In order to run the current test suite, run the command:
 
 ```sh
-make test
+make test-all
 ```
 ## Acknowledgements:
 

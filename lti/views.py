@@ -214,6 +214,7 @@ class ExtendedFlaskMessageLaunch(FlaskMessageLaunch):
 def get_launch_data_storage():
     return FlaskCacheDataStorage(cache)
 
+
 def init_views(app):
     # OIDC Login
     @app.route("/login/", methods=["GET", "POST"])
@@ -234,7 +235,6 @@ def init_views(app):
             main_msg="Your browser prohibits saving cookies in an iframe.",
             click_msg="Click here to open the application in a new tab.",
         ).redirect(target_link_uri)
-
 
     @app.route("/launch/", methods=["POST"])
     def launch():
@@ -262,7 +262,6 @@ def init_views(app):
         # Redirect to the quiz for your course
         return redirect(url_for("quiz", course_id=session["course_id"]))
 
-
     @app.route("/lticonfig/", methods=["GET"])
     def get_config():
         domain = urlparse(request.url_root).netloc
@@ -275,11 +274,9 @@ def init_views(app):
             mimetype="application/json",
         )
 
-
     @app.route("/jwks/", methods=["GET"])
     def get_jwks():
         return get_lti_config().get_jwks()
-
 
     def error(exception=None):
         return Response(
@@ -291,7 +288,6 @@ def init_views(app):
             )
         )
 
-
     @app.context_processor
     def utility_processor():
         def google_analytics():
@@ -299,14 +295,12 @@ def init_views(app):
 
         return dict(google_analytics=google_analytics())
 
-
     @app.route("/", methods=["POST", "GET"])
     def index():
         """
         Default app index.
         """
         return "Please contact your System Administrator."
-
 
     @app.route("/status", methods=["GET"])
     def status():  # pragma: no cover
@@ -322,7 +316,7 @@ def init_views(app):
             "tool": "Quiz Extensions",
             "checks": {
                 "index": False,
-                #"lticonfig": False,
+                # "lticonfig": False,
                 "api_key": False,
                 "redis": False,
                 "db": False,
@@ -331,7 +325,7 @@ def init_views(app):
             "url": url_for("index", _external=True),
             "api_url": config.API_URL,
             "debug": app.debug,
-            #"config_url": url_for("lticonfig", _external=True),
+            # "config_url": url_for("lticonfig", _external=True),
             "job_queue": job_queue_length,
         }
 
@@ -381,7 +375,9 @@ def init_views(app):
 
         # Check RQ Worker
         status["checks"]["worker"] = (
-            call('ps aux | grep "rq worker" | grep "quizext" | grep -v grep', shell=True)
+            call(
+                'ps aux | grep "rq worker" | grep "quizext" | grep -v grep', shell=True
+            )
             == 0
         )
 
@@ -389,7 +385,6 @@ def init_views(app):
         status["healthy"] = all(v is True for k, v in status["checks"].items())
 
         return Response(json.dumps(status), mimetype="application/json")
-
 
     @app.route("/quiz/<course_id>/", methods=["GET"])
     @lti_required(role="staff")
@@ -401,7 +396,6 @@ def init_views(app):
         to moderate quizzes for.
         """
         return render_template("userselect.html", course_id=course_id)
-
 
     @app.route("/refresh/<course_id>/", methods=["POST"])
     def refresh(course_id=None):
@@ -415,11 +409,12 @@ def init_views(app):
         """
         job = q.enqueue_call(func=refresh_background, args=(course_id,))
         return Response(
-            json.dumps({"refresh_job_url": url_for("job_status", job_key=job.get_id())}),
+            json.dumps(
+                {"refresh_job_url": url_for("job_status", job_key=job.get_id())}
+            ),
             mimetype="application/json",
             status=202,
         )
-
 
     @app.route("/update/<course_id>/", methods=["POST"])
     @lti_required(role="staff")
@@ -441,14 +436,17 @@ def init_views(app):
         return Response(
             json.dumps(
                 {
-                    "refresh_job_url": url_for("job_status", job_key=refresh_job.get_id()),
-                    "update_job_url": url_for("job_status", job_key=update_job.get_id()),
+                    "refresh_job_url": url_for(
+                        "job_status", job_key=refresh_job.get_id()
+                    ),
+                    "update_job_url": url_for(
+                        "job_status", job_key=update_job.get_id()
+                    ),
                 }
             ),
             mimetype="application/json",
             status=202,
         )
-
 
     @app.route("/jobs/<job_key>/", methods=["GET"])
     def job_status(job_key):
@@ -467,7 +465,9 @@ def init_views(app):
             )
 
         if job.is_finished:
-            return Response(json.dumps(job.result), mimetype="application/json", status=200)
+            return Response(
+                json.dumps(job.result), mimetype="application/json", status=200
+            )
         elif job.is_failed:
             logger.error("Job {} failed.\n{}".format(job_key, job.exc_info))
             return Response(
@@ -481,8 +481,9 @@ def init_views(app):
                 status=500,
             )
         else:
-            return Response(json.dumps(job.meta), mimetype="application/json", status=202)
-
+            return Response(
+                json.dumps(job.meta), mimetype="application/json", status=202
+            )
 
     @app.route("/missing_and_stale_quizzes/<course_id>/", methods=["GET"])
     def missing_and_stale_quizzes_check(course_id):
@@ -507,7 +508,6 @@ def init_views(app):
 
         missing = len(missing_and_stale_quizzes(canvas, course_id, True)) > 0
         return json.dumps(missing)
-
 
     @app.route("/filter/<course_id>/", methods=["GET"])
     @lti_required(role="staff")
@@ -575,7 +575,7 @@ def update_background(course_id, extension_dict):
 
         user_ids = extension_dict.get("user_ids", [])
 
-        #New Quizzes requires an int-type ID
+        # New Quizzes requires an int-type ID
         for i, id in enumerate(user_ids):
             user_ids[i] = int(id)
 
@@ -840,7 +840,7 @@ def refresh_background(course_id):
             percent_user_map[extension.percent].append(user_canvas_id)
 
         if len(percent_user_map) < 1:
-            msg_str = f"No active extensions were found.<br>"
+            msg_str = "No active extensions were found.<br>"
             if len(inactive_list) > 0:
                 msg_str += "Extensions for the following students are inactive:<br>{}"
                 msg_str = msg_str.format("<br>".join(inactive_list))
@@ -887,5 +887,6 @@ def refresh_background(course_id):
         msg = "{} quizzes have been updated.".format(len(quizzes))
         update_job(job, 100, msg, "complete", error=False)
         return job.meta
-    
+
+
 init_views(app)

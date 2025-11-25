@@ -7,16 +7,17 @@
 - Quiz Extensions is now using the LTI 1.3 protocol.
   - You will need to redeploy this tool using LTI 1.3 to access the new features. Instructions to do this are in the README.
 - *New Quizzes* can now be processed by Quiz Extensions.
-- Updated all dependencies to much newer versions.
 - Updated the README to address the deployment method overhaul.
 
 ### Backstage
 
-- Replaced our Canvas API utility functions with the proper PyPi *Canvas API* package.
+- Replaced our Canvas API utility functions with the proper *Canvas API* package. Stale functions have been removed.
 - The project has been properly Dockerized now, and upgraded to run Python 3.12.
 - Now uses gunicorn as our WSGI server.
 - Added a Makefile with commands for various build/deploy/test functions, based off of the UCF Open LTI 1.3 Flask template.
 - config.py has been updated to use a .env file, please see *.env.template*.
+- Testing suite has been rewritten to use CanvasAPI and LTI 1.3, and has tests for New Quizzes.
+- Updated all dependencies to much newer versions.
 
 ## [5.0.0] - 2021-10-31
 

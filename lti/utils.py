@@ -4,7 +4,6 @@ import logging
 import math
 from logging.config import dictConfig
 
-import requests
 from canvasapi import Canvas
 from canvasapi.exceptions import CanvasException
 
@@ -74,7 +73,6 @@ def extend_quiz(quiz, is_new: bool, percent, user_id_list):
         msg = (
             "Error creating extension for " + tag + " Quiz #{}. Canvas status code: {}"
         )
-        logger.exception("Test Exception")
         return {
             "success": False,
             "message": msg.format(quiz_id, err),
@@ -87,80 +85,6 @@ def extend_quiz(quiz, is_new: bool, percent, user_id_list):
         "message": msg.format(added_time, quiz_id),
         "added_time": added_time,
     }
-
-
-# all occurances migrated except tests
-def get_quizzes(course_id, per_page=config.MAX_PER_PAGE):
-    """
-    Get all quizzes in a Canvas course.
-
-    :param course_id: The Canvas ID of a Course
-    :type course_id: int
-    :param per_page: The number of quizzes to get per page.
-    :type per_page: int
-    :rtype: list
-    :returns: A list of dictionaries representing Canvas Quiz objects.
-    """
-    quizzes = []
-    quizzes_url = "{}/api/v1/courses/{}/quizzes?per_page={}".format(
-        config.API_URL, course_id, per_page
-    )
-
-    while True:
-        quizzes_response = requests.get(quizzes_url, headers=headers)
-
-        quizzes_list = quizzes_response.json()
-
-        if "errors" in quizzes_list:
-            break
-
-        quizzes.extend(quizzes_list)
-
-        try:
-            quizzes_url = quizzes_response.links["next"]["url"]
-        except KeyError:
-            break
-
-    return quizzes
-
-
-# all occurances migrated except tests
-def get_user(course_id, user_id):
-    """
-    Get a user from canvas by id, with respect to a course.
-
-    :param user_id: ID of a Canvas course.
-    :type user_id: int
-    :param user_id: ID of a Canvas user.
-    :type user_id: int
-    :rtype: dict
-    :returns: A dictionary representation of a User in Canvas.
-    """
-    response = requests.get(
-        "{}/api/v1/courses/{}/users/{}".format(config.API_URL, course_id, user_id),
-        params={"include[]": "enrollments"},
-        headers=headers,
-    )
-    response.raise_for_status()
-
-    return response.json()
-
-
-# all occurances migrated except tests
-def get_course(course_id):
-    """
-    Get a course from canvas by id.
-
-    :param course_id: ID of a Canvas course.
-    :type course_id: int
-    :rtype: dict
-    :returns: A dictionary representation of a Course in Canvas.
-    """
-    course_url = "{}/api/v1/courses/{}".format(config.API_URL, course_id)
-    response = requests.get(course_url, headers=headers)
-    response.raise_for_status()
-
-    return response.json()
 
 
 def get_or_create(session, model, **kwargs):
