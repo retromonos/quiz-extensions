@@ -13,7 +13,7 @@
     border-radius: 4px;
 }
 
-#user_list p {
+#user_list h5 {
     text-align: center;
     margin-top: 50px;
 }
@@ -24,23 +24,49 @@
     display: block;
 }
 
-#form_div, #selected_header {
+#form_div, #selected_header, #avaliable_header {
     width: 100%;
     height: 35px;
     text-align: center;
+}
+
+#filter_form {
+    flex-direction: row;
+    display: flex;
+    gap: 0.5rem;
+}
+
+#filter_users {
+    width: 100%;
 }
 
 #selected_header h4 {
     margin: 0px;
     padding: 8px;
 }
-
-#container {
-    width: 70%;
-    margin-top: 25px;
-    margin-left: auto;
-    margin-right: auto;
+#avaliable_header h4 {
+    margin: 0px;
+    padding: 8px;
 }
+
+@media (width <= 1000px) {
+    #container {
+        width: 90%;
+        margin-top: 25px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+@media (width > 1000px) {
+    #container {
+        width: 70%;
+        margin-top: 25px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
 
 #modal_percent_added {
     font-weight: bold;
@@ -67,6 +93,27 @@ td {
 }
 
 .user {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.user_list_key {
+    padding: 2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    background-color: gainsboro;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.new_banner {
+    padding: 8px;
+    margin-bottom: 12px;
+    text-align: left;
+    background-color: #e4f4fa;
+    border-left: solid;
+    border-width: 4px;
+    border-color: #4ec4ff;
+    border-radius: 8px;
 }

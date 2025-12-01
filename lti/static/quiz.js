@@ -144,7 +144,7 @@ function clearAlerts() {
 function ajaxFilter(query, callback) {
 	var xhttp = new XMLHttpRequest();
 
-	user_list_div.innerHTML = "<div id=\"user_list\"><p>Loading...</p><p>Please wait.</p></div>";
+	user_list_div.innerHTML = "<div id=\"user_list\"><h5 id=\"loader\">Loading...</h5></div>";
 
 	xhttp.onreadystatechange = function () {
 		if (xhttp.readyState == 4 && xhttp.status == 200) {
@@ -400,9 +400,12 @@ function disableAlreadySelected() {
 
 function checkIfEmpty() {
 	var user_list_children = user_list.getElementsByClassName("user");
+	var loader = document.getElementById("loader")
 
 	if (user_list_children.length <= 0) {
-		var p = document.createElement("p");
+		if (loader) document.removeChild(loader)
+
+		var p = document.createElement("h5");
 		p.className = "no-matching";
 		p.innerHTML = "No matching students found.";
 		user_list.appendChild(p);

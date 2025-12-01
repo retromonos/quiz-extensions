@@ -4,11 +4,15 @@
 <h1 class="text-center">Quiz Extensions</h1>
 
 <div id="container" class="container">
+	<section class="new_banner">
+		<em><b>New!</b></em> Quiz Extensions now has support for the <em>New Quizzes</em> quiz engine.
+	</section>
 	<p>This tool will apply extra time to <strong>all existing</strong> quizzes/exams. For example, Suzy Johnson and
-		Stephen Smith need Time and a Half. Select the students below and choose the appropriate amount of extra time
-		e.g., Time and a Half (1.5x).</p>
+		Stephen Smith both need Time and a Half. Select the students below and choose the appropriate amount of extra time
+		e.g., Time and a Half (1.5x). Selecting Normal (1x) will reset accommodations for those selected.</p>
 	<p>If additional quizzes/exams are added during the semester, a message will appear below stating there are new
-		quizzes which need extensions. Click the <strong>Apply Now</strong> button to add the same extensions.</p>
+		quizzes which need extensions. Click the <strong>Apply Now</strong> button to add the same extensions.
+		This is not an automatic process, and you will need to reopen the tool to apply these extensions.</p>
 	<div id="alerts" class='text-center'>
 		<div id="missing_alert" class='alert alert-warning fade in' role='alert' style="display: none;">
 			<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
@@ -17,23 +21,27 @@
 		</div>
 	</div>
 	<div id="lists" class="row">
-		<div id="users" class="col-xs-6">
-			<div id="form_div">
-				<form id="filter_form" class="form-inline">
-					<input type="text" id="filter_users" class="form-control" placeholder="Student Name">
-					<button type="submit" id="filter_users_button" class="btn btn-info btn-sm"><span
-							class="glyphicon glyphicon-search"></span> Search</button>
-				</form>
+		<div id="users" class="col-sm-6">
+			<div id="avaliable_header">
+				<h4>Avaliable Students</h4>
 			</div>
 			<div id="user_list_div">
 				<!-- user_list loads here -->
 			</div>
+			<div id="form_div">
+				<form id="filter_form" class="form-inline">
+					<input type="text" id="filter_users" class="form-control" placeholder="Search by Name or ID...">
+					<button type="submit" id="filter_users_button" class="btn btn-info btn-sm"><span
+							class="glyphicon glyphicon-search"></span> Search</button>
+				</form>
+			</div>
 		</div>
-		<div id="selected_users" class="col-xs-6">
+		<div id="selected_users" class="col-sm-6">
 			<div id="selected_header">
 				<h4>Selected Students</h4>
 			</div>
-			<div id="selected_user_list" class="btn-group-vertical"></div>
+			<div id="selected_user_list" class="btn-group-vertical">
+			</div>
 			<button id="go_button" type="button" class="btn btn-success pull-left" data-toggle="modal"
 				data-target="#go_modal"><span class="glyphicon glyphicon-ok"></span> Submit</button>
 			<button id="clear_button" type="button" class="btn btn-danger pull-right"><span
