@@ -9,4 +9,3 @@ Flask-Testing>=0.8.1
 isort
 requests-mock
 oauthlib
-pytest

@@ -14,14 +14,13 @@ ALLOWED_CANVAS_DOMAINS = (
     os.environ.get("ALLOWED_CANVAS_DOMAINS", "").replace(" ", "").split(",")
 )
 
+PREFERRED_URL_SCHEME = os.environ.get("PREFERRED_URL_SCHEME", "https")
 # The maximum amount of objects the Canvas API will return per page (usually 100)
 MAX_PER_PAGE = int(os.environ.get("MAX_PER_PAGE", 100))
 
 # A secret key used by Flask for signing. KEEP THIS SECRET!
 # (e.g. 'Ro0ibrkb4Z4bZmz1f5g1+/16K19GH/pa')
 SECRET_KEY = os.environ.get("SECRET_KEY")
-
-LTI_TOOL_ID = os.environ.get("LTI_TOOL_ID")  # A unique ID for the tool
 
 # URI for database. (e.g. 'mysql://root:root@localhost/quiz_extensions')
 SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI")
@@ -69,27 +68,6 @@ LOGGING_CONFIG = {
 # Used only to run tests
 TESTING_API_URL = os.environ.get("TESTING_API_URL")
 TESTING_API_KEY = os.environ.get("TESTING_API_KEY")
-
-CONSUMER_KEY = os.environ.get("CONSUMER_KEY", "key")
-SHARED_SECRET = os.environ.get("SHARED_SECRET", "secret")
-
-# Configuration for LTI
-PYLTI_CONFIG = {
-    "consumers": {
-        CONSUMER_KEY: {"secret": SHARED_SECRET}
-        # Feel free to add more key/secret pairs for other consumers.
-    },
-    "roles": {
-        # Maps values sent in the lti launch value of "roles" to a group
-        # Allows you to check LTI.is_role('staff') for your user
-        "staff": [
-            "urn:lti:instrole:ims/lis/Administrator",
-            "Instructor",
-            # 'ContentDeveloper',
-            # 'urn:lti:role:ims/lis/TeachingAssistant'
-        ]
-    },
-}
 
 # Chrome 80 SameSite=None; Secure fix
 SESSION_COOKIE_SECURE = int(os.environ.get("SESSION_COOKIE_SECURE", 1)) == 1

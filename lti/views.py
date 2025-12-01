@@ -576,8 +576,7 @@ def update_background(course_id, extension_dict):
         user_ids = extension_dict.get("user_ids", [])
 
         # New Quizzes requires an int-type ID
-        for i, id in enumerate(user_ids):
-            user_ids[i] = int(id)
+        user_ids = [int(id) for id in user_ids]
 
         percent = extension_dict.get("percent", None)
 
