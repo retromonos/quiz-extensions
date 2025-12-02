@@ -49,7 +49,7 @@
     padding: 8px;
 }
 
-@media (width <= 1000px) {
+@media (width <= 1200px) {
     #container {
         width: 90%;
         margin-top: 25px;
@@ -58,9 +58,9 @@
     }
 }
 
-@media (width > 1000px) {
+@media (width > 1200px) {
     #container {
-        width: 70%;
+        width: 80%;
         margin-top: 25px;
         margin-left: auto;
         margin-right: auto;
@@ -93,8 +93,7 @@ td {
 }
 
 .user {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-inline: 12px;
 }
 
 .user_list_key {
@@ -108,12 +107,48 @@ td {
 }
 
 .new_banner {
-    padding: 8px;
+    padding: 12px;
     margin-bottom: 12px;
-    text-align: left;
+    text-align: center;
     background-color: #e4f4fa;
     border-left: solid;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
     border-width: 4px;
     border-color: #4ec4ff;
     border-radius: 8px;
+}
+
+.extend_banner {
+    padding: 12px;
+    margin-bottom: 12px;
+    text-align: center;
+    background-color: #ebfae4;
+    border-left: solid;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    border-width: 4px;
+    border-color: #5db85d;
+    border-radius: 8px;
+}
+
+.scroll_info_div {
+    position: sticky;
+    top: 92.5%;
+    width: 100px;
+    height: 0%;
+    padding-inline: 4px;
+    margin-inline: auto;
+    z-index: 50;
+}
+
+.scroll_info {
+    background-color: #00000033;
+    color: white;
+    padding: 2px;
+    border-radius: 4px;
+    width: 100%;
+    margin-inline: auto;
 }

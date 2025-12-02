@@ -162,7 +162,15 @@ class ViewTests(flask_testing.TestCase):
                 {"id": 4, "name": "Jon Doe"},
             ],
             headers={
-                "Link": f'<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="current",<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="first",<{self.app.config["TESTING_API_URL"]}courses/1/search_users?page=1&per_page=10>; rel="last",'
+                "Link": f'<{self.app.config["TESTING_API_URL"]}'
+                "courses/1/search_users?page=1&per_page=10>; "
+                'rel="current",'
+                f'<{self.app.config["TESTING_API_URL"]}'
+                "courses/1/search_users?page=1&per_page=10>; "
+                'rel="first",'
+                f'<{self.app.config["TESTING_API_URL"]}'
+                "courses/1/search_users?page=1&per_page=10>; "
+                'rel="last",'
             },
         )
 
@@ -1129,7 +1137,8 @@ class ViewTests(flask_testing.TestCase):
         self.assertTrue(job.is_finished)
         self.assertEqual(
             f"{job.return_value()["status_msg"]}",
-            "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User",
+            "No active extensions were found."
+            "<br>Extensions for the following students are inactive:<br>Missing User",
         )
 
     def test_refresh_background_inactive_user(self, m):
@@ -1231,7 +1240,8 @@ class ViewTests(flask_testing.TestCase):
         self.assertTrue(job.is_finished)
         self.assertEqual(
             f"{job.return_value()["status_msg"]}",
-            "No active extensions were found.<br>Extensions for the following students are inactive:<br>Missing User",
+            "No active extensions were found."
+            "<br>Extensions for the following students are inactive:<br>Missing User",
         )
 
     def test_refresh_background_update_success(self, m):

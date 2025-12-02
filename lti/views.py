@@ -11,6 +11,7 @@ import redis
 import requests
 from canvasapi import Canvas
 from canvasapi.exceptions import CanvasException, ResourceDoesNotExist
+from canvasapi.new_quiz import NewQuiz
 from flask import (
     Flask,
     Response,
@@ -162,14 +163,16 @@ def lti_required(role=None):
             if role not in role_config:
                 app.logger.error(f"Invalid role: {role}")
                 return (
-                    "<h2>Unauthorized</h2><p>Invalid role configuration. Please contact support.</p>",
+                    "<h2>Unauthorized</h2>"
+                    "<p>Invalid role configuration. Please contact support.</p>",
                     401,
                 )
 
             if "launch_id" not in session:
                 return (
                     # TODO: improve this message to be more user-friendly
-                    "<h2>Unauthorized</h2><p>You must use this tool in an LTI context.</p>",
+                    "<h2>Unauthorized</h2>"
+                    "<p>You must use this tool in an LTI context.</p>",
                     401,
                 )
 
@@ -183,7 +186,8 @@ def lti_required(role=None):
                 role_vocab in session["roles"] for role_vocab in role_config[role]
             ):
                 return (
-                    f"<h2>Unauthorized</h2><p>You must be have the {role} role to use this tool.</p>",
+                    "<h2>Unauthorized</h2>"
+                    f"<p>You must be have the {role} role to use this tool.</p>",
                     401,
                 )
 
@@ -633,9 +637,7 @@ def update_background(course_id, extension_dict):
 
         all_quizzes = quizzes + new_quizzes
 
-        num_quizzes = len(quizzes)
-        num_nquizzes = len(new_quizzes)
-        total_quizzes = num_nquizzes + num_quizzes
+        total_quizzes = len(all_quizzes)
 
         quiz_time_list = []
         unchanged_quiz_time_list = []
@@ -655,8 +657,9 @@ def update_background(course_id, extension_dict):
 
         for index, quiz in enumerate(all_quizzes):
             # Is true if the quiz is a New Quiz
-            is_new = index >= num_quizzes
+            is_new = isinstance(quiz, NewQuiz)
 
+            # Add time_limit attribute to quiz
             if is_new:
                 settings = quiz.__getattribute__("quiz_settings")
                 if settings["has_time_limit"]:
@@ -666,14 +669,11 @@ def update_background(course_id, extension_dict):
                     )
                 else:
                     quiz.__setattr__("time_limit", 0)
-                logger.debug(
-                    f"set new quiz time limit to {quiz.__getattribute__('time_limit')} minutes"
-                )
 
             quiz_id = quiz.id
             quiz_title = quiz.title
 
-            comp_perc = int(((float(index)) / float(num_quizzes)) * 100)
+            comp_perc = int(((float(index)) / float(total_quizzes)) * 100)
             updating_str = "Updating quiz #{} - {} [{} of {}]"
             update_job(
                 job,
@@ -849,8 +849,7 @@ def refresh_background(course_id):
 
         for index, quiz in enumerate(quizzes):
             # Is true if the quiz is a New Quiz
-            # is_new is set in the missing_and_stale_quizzes() function
-            is_new = quiz.__getattribute__("is_new")
+            is_new = isinstance(quiz, NewQuiz)
 
             quiz_id = quiz.id
             quiz_title = quiz.title

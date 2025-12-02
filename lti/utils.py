@@ -6,6 +6,7 @@ from logging.config import dictConfig
 
 from canvasapi import Canvas
 from canvasapi.exceptions import CanvasException
+from canvasapi.new_quiz import NewQuiz
 
 import config
 from models import Quiz
@@ -136,14 +137,13 @@ def missing_and_stale_quizzes(canvas: Canvas, course_id, quickcheck=False):
 
     all_quizzes = quizzes + new_quizzes
 
-    num_quizzes = len(quizzes)
-
     missing_list = []
 
     for index, canvas_quiz in enumerate(all_quizzes):
         # Is true if the quiz is a New Quiz
-        is_new = index >= num_quizzes
-        canvas_quiz.__setattr__("is_new", is_new)
+        is_new = isinstance(canvas_quiz, NewQuiz)
+
+        # Add time_limit attribute to quiz
         if is_new:
             settings = canvas_quiz.__getattribute__("quiz_settings")
             if settings["has_time_limit"]:
@@ -153,9 +153,6 @@ def missing_and_stale_quizzes(canvas: Canvas, course_id, quickcheck=False):
                 )
             else:
                 canvas_quiz.__setattr__("time_limit", 0)
-            logger.debug(
-                f"set new quiz time limit to {canvas_quiz.__getattribute__('time_limit')} minutes"
-            )
 
         quiz = Quiz.query.filter_by(canvas_id=canvas_quiz.id).first()
 
