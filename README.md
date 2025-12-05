@@ -41,50 +41,26 @@ Switch into the new directory
 cd quiz-extensions
 ```
 
+### Environment Variables
+
 Create the .env file from the template
 
 ```sh
 cp .env.template .env
 ```
-### Environment Variables
 
-Fill in the .env file
+Fill in the .env file.
 
-```
-# Input booleans as either 0 or 1
+The following variables NEED to be changed for it to function:
 
-REQUIREMENTS="requirements.txt"
-REDIS_URL="redis://example_redis:6379"
+`API_KEY`: Your Canvas API key, for making extension/accomodation requests.
+`API_URL`: The URL to your Canvas installation. You do not need to put "/api/v1", CanvasAPI handles that automatically.
+`SECRET_KEY`: A secret key used by Flask for signing LTI 1.3 deployments. If you need help making a secure key, see [Create a Secret Key for Flask](https://gist.github.com/Thetwam/00db8de982d0202ece2420a87065c525) for instructions.
 
-DEBUG=0
-TESTING=0
+These variables can be changed depending on your installation, but are fine by default:
 
-TESTING_API_URL="https://example.edu"
-
-API_KEY="CHANGEME"
-API_URL="https://example.edu"
-
-SECRET_KEY="CHANGEME"
-
-MAX_PER_PAGE=100
-
-SQLALCHEMY_DATABASE_URI="mysql://example_db:pw@example_db:3306/db_name"
-SQLALCHEMY_TRACK_MODIFICATIONS=0
-
-GOOGLE_ANALYTICS="GA-"
-
-SESSION_COOKIE_SECURE=1
-SESSION_COOKIE_SAMESITE="None"
-```
-
-### Config
-
-All the variables are preset from the templates, but for production you will want to edit the `.env` environment variables `CONFIG_CLASS` and `SECRET_KEY`.
-
-!TODO
-add steps about API variables if relevant
-
-To update the new `.env` file with a `SECRET_KEY` see [Create a Secret Key for Flask](https://gist.github.com/Thetwam/00db8de982d0202ece2420a87065c525) for instructions.
+`REDIS_URL`: URI to the Redis server, do not change if you are not running another Redis server besides the default Docker compose settings.
+`SQLALCHEMY_DATABASE_URI`: URI to the database, do not change if you are not running another DB besides the default Docker compose settings.
 
 ### Run Database Migrations
 
