@@ -7,8 +7,9 @@ all quizzes at once.
 
 # Table of Contents
 
-- [Setup](#setup)
+- [Installation](#installation)
   - [Download the Repository](#download-the-repository)
+  - [Logs](#logs)
   - [Environment Variables](#environment-variables)
   - [Config](#config)
   - [Run Database Migrations](#run-database-migrations)
@@ -26,6 +27,7 @@ all quizzes at once.
   - [Formatting and Linting](#formatting-and-linting)
   - [Testing](#testing)
 - [Acknowledgements](#acknowledgements)
+- [Contact Us](#contact-us)
 
 ## Installation
 
@@ -41,6 +43,20 @@ Switch into the new directory
 cd quiz-extensions
 ```
 
+### Logs
+
+Logger requires a log directory to function.
+
+Create the directory
+```sh
+mkdir ./lti/logs
+```
+
+Then create the log file
+```sh
+touch ./lti/logs/quiz_ext.log
+```
+
 ### Environment Variables
 
 Create the .env file from the template
@@ -51,7 +67,7 @@ cp .env.template .env
 
 Fill in the .env file.
 
-The following variables NEED to be changed for it to function:
+The following variables NEED to be changed for the tool to function:
 
 `API_KEY`: Your Canvas API key, for making extension/accomodation requests.
 `API_URL`: The URL to your Canvas installation. You do not need to put "/api/v1", CanvasAPI handles that automatically.
@@ -59,8 +75,8 @@ The following variables NEED to be changed for it to function:
 
 These variables can be changed depending on your installation, but are fine by default:
 
-`REDIS_URL`: URI to the Redis server, do not change if you are not running another Redis server besides the default Docker compose settings.
-`SQLALCHEMY_DATABASE_URI`: URI to the database, do not change if you are not running another DB besides the default Docker compose settings.
+`REDIS_URL`: URI to the Redis server, do not change unless you are using an external Redis server.
+`SQLALCHEMY_DATABASE_URI`: URI to the database, do not change unless you are using an external database.
 
 ### Run Database Migrations
 
@@ -176,7 +192,7 @@ When prompted, paste the deployment ID from Canvas.
 
 ### Wrapping up
 
-Python LTI 1.3 Project is now configured and installed! Go to the course or account in Canvas where you installed the tool and find your tool in the Course Navigation or Account Navigation. Click on the tool to launch it.
+Quiz Extensions is now configured and installed! Go to the course or account in Canvas where you installed the tool and find your tool in the Course Navigation or Account Navigation. Click on the tool to launch it.
 
 ## Code Quality and Testing
 
