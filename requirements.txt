@@ -4,7 +4,7 @@ Flask-Caching==2.3.1
 Flask-Migrate==4.1.0
 Flask-SQLAlchemy==3.1.1
 mysqlclient==2.2.8
-git+https://github.com/ucfopen/pylti1.3.git@master
+pylti1p3next==2.0.2
 redis==7.4.0
 requests==2.33.1
 rq==2.7.0
